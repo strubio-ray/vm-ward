@@ -26,7 +26,7 @@ share/vm-ward/       # launchd plist template
 3. Cocogitto creates the version tag and post-bump hooks push tag + commits to origin
 4. GitHub Actions (`bump-homebrew.yml`) detects the `v*` tag push
 5. `mislav/bump-homebrew-formula-action` updates the formula in `strubio-ray/homebrew-tap`
-6. Users get the update via `brew upgrade vm-ward`
+6. Users get the update via `brew update && brew upgrade vm-ward` (`brew update` refreshes the tap index first)
 
 ## Dependencies
 
