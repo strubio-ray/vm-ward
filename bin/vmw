@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VMW_VERSION="0.1.0"
+
+# Resolve symlinks (Homebrew installs bin/vmw as a symlink to Cellar)
+vmw_resolve_root() {
+  local source="$0"
+  while [ -L "$source" ]; do
+    local dir
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    [[ "$source" != /* ]] && source="$dir/$source"
+  done
+  cd -P "$(dirname "$source")/.." && pwd
+}
+VMW_ROOT="$(vmw_resolve_root)"
+
+source "${VMW_ROOT}/lib/vmw-common.sh"
+
+case "$(uname -s)" in
+  Darwin) source "${VMW_ROOT}/lib/vmw-host.sh" ;;
+  Linux)  source "${VMW_ROOT}/lib/vmw-guest.sh" ;;
+  *)      die "Unsupported platform: $(uname -s)" ;;
+esac
+
+main "$@"
