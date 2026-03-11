@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.1.3](https://github.com/strubio-ray/vm-ward/compare/4b8e8b297e0513d670fd967873dfa64f08c5e8ba..v0.1.3) - 2026-03-11
+#### Bug Fixes
+- correct VM status detection by resolving VBox UUIDs - ([4b8e8b2](https://github.com/strubio-ray/vm-ward/commit/4b8e8b297e0513d670fd967873dfa64f08c5e8ba)) - Steven
+#### Documentation
+- add project-level CLAUDE.md - ([f47b3ef](https://github.com/strubio-ray/vm-ward/commit/f47b3ef64fde6d6f5b453f2795ec0cf6207365ce)) - Steven
+
+- - -
+
 ## [v0.1.2](https://github.com/strubio-ray/vm-ward/compare/v0.1.1..v0.1.2) - 2026-03-11
 #### Miscellaneous Chores
 - (**version**) v0.1.1 - ([f804f7a](https://github.com/strubio-ray/vm-ward/commit/f804f7abe51d3a7d1011e245555e4a42b5830a96)) - Steven
