@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.1.1](https://github.com/strubio-ray/vm-ward/compare/d3df3554c3155d7f3e7d0e4c031854c91e7a6bc5..v0.1.1) - 2026-03-11
+#### Features
+- add homebrew formula support - ([d3df355](https://github.com/strubio-ray/vm-ward/commit/d3df3554c3155d7f3e7d0e4c031854c91e7a6bc5)) - Steven
+
+- - -
+
 ## [v0.1.0](https://github.com/strubio-ray/vm-ward/compare/3c4575602ffd333781b285f3b541f371a25a2bfe..v0.1.0) - 2026-03-11
 #### Features
 - add launchd plist template - ([b647bd5](https://github.com/strubio-ray/vm-ward/commit/b647bd529c51fee6e4f71742ba923d1bc4c1a49b)) - Steven
