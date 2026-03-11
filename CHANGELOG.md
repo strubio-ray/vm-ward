@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.1.2](https://github.com/strubio-ray/vm-ward/compare/v0.1.1..v0.1.2) - 2026-03-11
+#### Miscellaneous Chores
+- (**version**) v0.1.1 - ([f804f7a](https://github.com/strubio-ray/vm-ward/commit/f804f7abe51d3a7d1011e245555e4a42b5830a96)) - Steven
+
+- - -
+
 ## [v0.1.1](https://github.com/strubio-ray/vm-ward/compare/d3df3554c3155d7f3e7d0e4c031854c91e7a6bc5..v0.1.1) - 2026-03-11
 #### Features
 - add homebrew formula support - ([d3df355](https://github.com/strubio-ray/vm-ward/commit/d3df3554c3155d7f3e7d0e4c031854c91e7a6bc5)) - Steven
