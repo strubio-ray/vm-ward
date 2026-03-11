@@ -1,0 +1,5 @@
+#!/bin/sh
+
+if command -v cog >/dev/null 2>&1; then
+  cog verify "$(cat "$1")"
+fi

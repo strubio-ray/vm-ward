@@ -1,0 +1,16 @@
+from_latest_tag = true
+ignore_merge_commits = true
+tag_prefix = "v"
+branch_whitelist = ["main"]
+
+post_bump_hooks = [
+    "git push",
+    "git push origin v{{version}}",
+    "echo 'Tag v{{version}} pushed.'",
+]
+
+[changelog]
+template = "remote"
+remote = "github.com"
+repository = "vm-ward"
+owner = "strubio-ray"
