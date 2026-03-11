@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VMW_VERSION="0.1.0"
+VMW_VERSION="%%VERSION%%"
 
 # Resolve symlinks (Homebrew installs bin/vmw as a symlink to Cellar)
 vmw_resolve_root() {
