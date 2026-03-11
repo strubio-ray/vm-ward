@@ -62,7 +62,16 @@ get_running_vms() {
   if ! command -v VBoxManage >/dev/null 2>&1; then
     return
   fi
-  VBoxManage list runningvms 2>/dev/null | sed -n 's/^".*"{\(.*\)}/\1/p'
+  VBoxManage list runningvms 2>/dev/null | sed -n 's/^"[^"]*" {\([^}]*\)}/\1/p'
+}
+
+# Resolve a Vagrant machine entry to its VirtualBox UUID
+resolve_vbox_uuid() {
+  local vfp="$1" name="$2"
+  local id_file="$vfp/.vagrant/machines/$name/virtualbox/id"
+  if [ -f "$id_file" ]; then
+    cat "$id_file"
+  fi
 }
 
 # Resolve current directory to a machine ID
@@ -208,16 +217,23 @@ cmd_status() {
   local now
   now=$(epoch_now)
 
+  local known_uuids=""
+
   if [ "$json_output" = true ]; then
     # JSON output mode
     local result="[]"
     for machine_id in $(echo "$machines" | jq -r 'keys[]' 2>/dev/null); do
-      local vfp vm_name provider state
+      local vfp vm_name provider state machine_name vbox_uuid
       vfp=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].vagrantfile_path // ""')
       vm_name=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].extra_data.box.name // .[$id].name // "unknown"')
       provider=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].provider // "unknown"')
+      machine_name=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].name // "default"')
+      vbox_uuid=$(resolve_vbox_uuid "$vfp" "$machine_name")
+      if [ -n "$vbox_uuid" ]; then
+        known_uuids="$known_uuids $vbox_uuid"
+      fi
 
-      if echo "$running_vms" | grep -qF "$machine_id" 2>/dev/null; then
+      if [ -n "$vbox_uuid" ] && echo "$running_vms" | grep -qF "$vbox_uuid" 2>/dev/null; then
         state="running"
       else
         state="poweroff"
@@ -245,8 +261,30 @@ cmd_status() {
         --arg state "$state" \
         --arg lease "$lease" \
         --arg remaining "$remaining" \
-        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining}]')
+        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, managed: true}]')
     done
+
+    # Add unmanaged VBox VMs
+    if command -v VBoxManage >/dev/null 2>&1; then
+      local all_vbox_vms
+      all_vbox_vms=$(VBoxManage list vms 2>/dev/null | sed -n 's/^"\([^"]*\)" {\([^}]*\)}/\1 \2/p')
+      while IFS=' ' read -r vm_display_name vm_uuid; do
+        [ -z "$vm_uuid" ] && continue
+        if echo "$known_uuids" | grep -qF "$vm_uuid" 2>/dev/null; then
+          continue
+        fi
+        local vm_state="poweroff"
+        if echo "$running_vms" | grep -qF "$vm_uuid" 2>/dev/null; then
+          vm_state="running"
+        fi
+        result=$(echo "$result" | jq \
+          --arg name "$vm_display_name" \
+          --arg id "$vm_uuid" \
+          --arg state "$vm_state" \
+          '. + [{id: $id, name: $name, path: "", state: $state, lease: "n/a", remaining: "n/a", managed: false}]')
+      done <<< "$all_vbox_vms"
+    fi
+
     echo "$result" | jq .
     return
   fi
@@ -259,14 +297,19 @@ cmd_status() {
 
   for machine_id in $(echo "$machines" | jq -r 'keys[]' 2>/dev/null); do
     has_vms=true
-    local vfp vm_name state
+    local vfp vm_name state machine_name vbox_uuid
     vfp=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].vagrantfile_path // ""')
     vm_name=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].extra_data.box.name // .[$id].name // "unknown"')
+    machine_name=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].name // "default"')
+    vbox_uuid=$(resolve_vbox_uuid "$vfp" "$machine_name")
+    if [ -n "$vbox_uuid" ]; then
+      known_uuids="$known_uuids $vbox_uuid"
+    fi
 
     local project
     project=$(basename "$vfp" 2>/dev/null || echo "unknown")
 
-    if echo "$running_vms" | grep -qF "$machine_id" 2>/dev/null; then
+    if [ -n "$vbox_uuid" ] && echo "$running_vms" | grep -qF "$vbox_uuid" 2>/dev/null; then
       state="running"
     else
       state="poweroff"
@@ -328,6 +371,31 @@ cmd_status() {
   if [ "$has_vms" = false ]; then
     echo "No VMs found in Vagrant machine index."
   fi
+
+  # Show unmanaged VBox VMs
+  if command -v VBoxManage >/dev/null 2>&1; then
+    local all_vbox_vms has_unmanaged=false
+    all_vbox_vms=$(VBoxManage list vms 2>/dev/null | sed -n 's/^"\([^"]*\)" {\([^}]*\)}/\1 \2/p')
+    while IFS=' ' read -r vm_display_name vm_uuid; do
+      [ -z "$vm_uuid" ] && continue
+      if echo "$known_uuids" | grep -qF "$vm_uuid" 2>/dev/null; then
+        continue
+      fi
+      if [ "$has_unmanaged" = false ]; then
+        has_unmanaged=true
+        printf "\n\033[2;3m%-20s %-40s %-10s\033[0m\n" "UNMANAGED VMs" "" ""
+        printf "\033[2m%s\033[0m\n" "$(printf '─%.0s' {1..70})"
+        printf "\033[2;3m%-20s %-40s %-10s\033[0m\n" "VM NAME" "UUID" "STATE"
+        printf "\033[2m%s\033[0m\n" "$(printf '─%.0s' {1..70})"
+      fi
+      local vm_state="poweroff"
+      if echo "$running_vms" | grep -qF "$vm_uuid" 2>/dev/null; then
+        vm_state="running"
+      fi
+      printf "\033[2;3m%-20s %-40s %-10s\033[0m\n" \
+        "$vm_display_name" "${vm_uuid:0:8}..." "$vm_state"
+    done <<< "$all_vbox_vms"
+  fi
 }
 
 cmd_sweep() {
@@ -380,17 +448,19 @@ cmd_sweep() {
   local warning_count=0
 
   for machine_id in $(echo "$machines" | jq -r 'keys[]' 2>/dev/null); do
+    local vfp vm_name provider machine_name vbox_uuid
+    vfp=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].vagrantfile_path // ""')
+    vm_name=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].extra_data.box.name // .[$id].name // "unknown"')
+    provider=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].provider // "virtualbox"')
+    machine_name=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].name // "default"')
+    vbox_uuid=$(resolve_vbox_uuid "$vfp" "$machine_name")
+
     # Skip VMs not actually running
-    if ! echo "$running_vms" | grep -qF "$machine_id" 2>/dev/null; then
+    if [ -z "$vbox_uuid" ] || ! echo "$running_vms" | grep -qF "$vbox_uuid" 2>/dev/null; then
       continue
     fi
 
     running_count=$(( running_count + 1 ))
-
-    local vfp vm_name provider
-    vfp=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].vagrantfile_path // ""')
-    vm_name=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].extra_data.box.name // .[$id].name // "unknown"')
-    provider=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].provider // "virtualbox"')
 
     # Create retroactive lease if none exists
     if ! lease_exists "$machine_id"; then
