@@ -87,6 +87,34 @@ format_remaining() {
   fi
 }
 
+# Convert epoch timestamp to human-readable "Xm ago" / "Xh ago"
+format_ago() {
+  local timestamp="$1"
+  if [ -z "$timestamp" ]; then
+    echo "n/a"
+    return
+  fi
+  local now
+  now=$(epoch_now)
+  local delta=$(( now - timestamp ))
+  if [ "$delta" -lt 0 ]; then
+    echo "n/a"
+    return
+  fi
+  local days=$(( delta / 86400 ))
+  local hours=$(( delta / 3600 ))
+  local mins=$(( delta / 60 ))
+  if [ "$days" -gt 0 ]; then
+    echo "${days}d ago"
+  elif [ "$hours" -gt 0 ]; then
+    echo "${hours}h ago"
+  elif [ "$mins" -gt 0 ]; then
+    echo "${mins}m ago"
+  else
+    echo "just now"
+  fi
+}
+
 # Ensure state and config directories exist
 ensure_dirs() {
   mkdir -p "${VMW_STATE_DIR:-$HOME/.local/state/vm-ward}"
