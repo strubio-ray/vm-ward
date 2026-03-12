@@ -4,7 +4,7 @@
 justfile
 Vagrantfile
 .workmux.yaml
-.vm/
+.vm/*
 !.vm/provision.sh
 !.vm/shared-dirs.yml
 !.vm/shared-files.yml
