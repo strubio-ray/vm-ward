@@ -8,7 +8,6 @@ Auto-halt daemon for forgotten Vagrant VMs. Pure bash — no build system.
 bin/vmw              # Entry point — resolves symlinks, detects platform, dispatches subcommands
 lib/vmw-common.sh    # Shared utilities (logging, JSON helpers, duration parsing)
 lib/vmw-host.sh      # macOS host daemon (Vagrant/VBox integration, leases, sweep)
-lib/vmw-guest.sh     # Linux guest agent (tmux warning display)
 share/vm-ward/       # launchd plist template
 ```
 
@@ -16,7 +15,7 @@ share/vm-ward/       # launchd plist template
 
 - **Vagrant machine IDs** (hex hashes) ≠ **VirtualBox UUIDs** (dashed format). Use `resolve_vbox_uuid()` to bridge them.
 - **Leases** track how long a VM is allowed to run. Stored in `~/.local/state/vm-ward/leases.json`.
-- **Sweep** runs every 5 min via launchd — warns at T1 (50%) and T2 (87.5%), halts on expiry.
+- **Sweep** runs every 5 min via launchd — warns at T1 (50%) and T2 (87.5%), halts on expiry. Activity detection uses `VBoxManage metrics query` (host-side CPU%). First sweep after VM start returns "idle" (metrics need one sampling period to populate).
 - **Version placeholder**: `bin/vmw` contains `VMW_VERSION="%%VERSION%%"` — injected by Homebrew formula at install time.
 
 ## Release Flow
@@ -30,7 +29,7 @@ share/vm-ward/       # launchd plist template
 
 ## Dependencies
 
-Runtime: `jq`, `vagrant`, `VBoxManage`, `tmux`
+Runtime: `jq`, `vagrant`, `VBoxManage`
 
 ## Useful Commands
 

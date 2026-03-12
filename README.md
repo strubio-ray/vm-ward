@@ -2,14 +2,13 @@
 
 Auto-halt daemon for forgotten Vagrant VMs.
 
-Discovers running VMs via Vagrant's machine index, assigns time-limited leases, warns users before expiry via tmux, and halts expired VMs automatically.
+Discovers running VMs via Vagrant's machine index, assigns time-limited leases, warns before expiry, and halts expired VMs automatically.
 
 ## Architecture
 
 Single binary (`vmw`), platform-detected behavior:
 
 - **macOS** (host): daemon that discovers VMs, manages leases, and enforces expiry
-- **Linux** (guest): warning agent that displays tmux messages when the host pushes alerts
 
 ## Install
 
@@ -30,7 +29,6 @@ cd vm-ward
 - `jq` — JSON processing
 - `vagrant` — VM management (host only)
 - `VBoxManage` — VM state detection (host only)
-- `tmux` — warning display (guest only)
 
 ## Usage
 
@@ -48,13 +46,6 @@ vmw sweep               # Run enforcement loop (called by launchd)
 vmw install             # Install launchd daemon
 vmw uninstall           # Remove launchd daemon
 vmw tmux-status         # Print tmux status bar segment
-```
-
-### Guest commands (Linux)
-
-```bash
-vmw warn "2h 13m remaining"          # Display warning in tmux
-vmw warn --urgent "15m remaining"    # Urgent warning (longer display)
 ```
 
 ### Duration formats
@@ -78,9 +69,10 @@ The daemon runs `vmw sweep` every 5 minutes, which:
 
 1. Discovers running VMs via Vagrant machine index
 2. Creates retroactive leases for VMs without one (default: 4h)
-3. Sends T1 warning at 50% elapsed (via `vagrant ssh -c "vmw warn"`)
-4. Sends T2 urgent warning at 87.5% elapsed
-5. Halts expired VMs via `vagrant halt`
+3. Logs T1 warning at 50% elapsed
+4. Logs T2 urgent warning at 87.5% elapsed
+5. Resets leases for VMs with detected CPU activity (via VBoxManage metrics)
+6. Halts expired VMs via `vagrant halt`
 
 ## Configuration
 
@@ -96,6 +88,10 @@ Optional config file at `~/.config/vm-ward/config.json`:
   "warnings": {
     "t1_ratio": 0.5,
     "t2_ratio": 0.875
+  },
+  "activity_detection": {
+    "enabled": true,
+    "cpu_threshold": "5"
   }
 }
 ```
