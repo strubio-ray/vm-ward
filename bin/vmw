@@ -20,7 +20,6 @@ source "${VMW_ROOT}/lib/vmw-common.sh"
 
 case "$(uname -s)" in
   Darwin) source "${VMW_ROOT}/lib/vmw-host.sh" ;;
-  Linux)  source "${VMW_ROOT}/lib/vmw-guest.sh" ;;
   *)      die "Unsupported platform: $(uname -s)" ;;
 esac
 

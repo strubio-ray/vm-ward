@@ -38,6 +38,14 @@ get_t2_ratio() {
   config_get '.warnings.t2_ratio' "$T2_RATIO"
 }
 
+get_activity_enabled() {
+  config_get '.activity_detection.enabled' "true"
+}
+
+get_activity_cpu_threshold() {
+  config_get '.activity_detection.cpu_threshold' "5"
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Vagrant machine index helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -193,8 +201,85 @@ create_lease() {
        duration: $dur,
        mode: $m,
        warned_t1: false,
-       warned_t2: false
+       warned_t2: false,
+       last_active: $cat
      }' "$LEASES_FILE" > "$tmp" && mv "$tmp" "$LEASES_FILE"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Activity detection
+# ─────────────────────────────────────────────────────────────────────────────
+
+ensure_metrics_setup() {
+  local vbox_uuid="$1"
+  # Check if metrics are already configured for this VM — avoid re-setup which discards collected data
+  local existing
+  existing=$(VBoxManage metrics list "$vbox_uuid" 2>/dev/null | grep -c "CPU/Load/User" || true)
+  if [ "$existing" -eq 0 ]; then
+    # Use parent metric CPU/Load for setup (sub-metrics may not be accepted by setup)
+    VBoxManage metrics setup --period 10 --samples 6 "$vbox_uuid" CPU/Load >/dev/null 2>&1 || true
+  fi
+}
+
+check_vm_activity() {
+  local vbox_uuid="$1"
+  local cpu_threshold="$2"
+
+  local output
+  output=$(VBoxManage metrics query "$vbox_uuid" CPU/Load/User 2>/dev/null) || {
+    echo "idle"
+    return
+  }
+
+  # Prefer the :avg row (present when --samples > 1), fall back to raw row
+  local cpu_pct
+  cpu_pct=$(echo "$output" | grep "CPU/Load/User:avg" | sed -E 's/.*[[:space:]]([0-9]+)(\.[0-9]+)?%.*/\1/')
+  if [ -z "$cpu_pct" ]; then
+    cpu_pct=$(echo "$output" | grep "CPU/Load/User" | head -1 | sed -E 's/.*[[:space:]]([0-9]+)(\.[0-9]+)?%.*/\1/')
+  fi
+
+  # No data yet (metrics just set up, need one sampling period to populate)
+  if [ -z "$cpu_pct" ]; then
+    echo "idle"
+    return
+  fi
+
+  if [ "$cpu_pct" -ge "$cpu_threshold" ] 2>/dev/null; then
+    echo "active"
+  else
+    echo "idle"
+  fi
+}
+
+reset_lease_activity() {
+  local machine_id="$1"
+  local now
+  now=$(epoch_now)
+
+  local duration
+  duration=$(lease_get "$machine_id" "duration")
+  if [ -z "$duration" ]; then
+    log "Warning: no duration found for $machine_id, skipping activity reset"
+    return 1
+  fi
+
+  local duration_secs
+  duration_secs=$(parse_duration "$duration")
+  if [ "$duration_secs" = "indefinite" ]; then
+    return 0  # indefinite leases don't need reset
+  fi
+
+  local new_expires=$(( now + duration_secs ))
+  local tmp
+  tmp=$(mktemp "${LEASES_FILE}.XXXXXX")
+  jq --arg id "$machine_id" \
+     --argjson now "$now" \
+     --argjson eat "$new_expires" \
+     '.[$id].created_at = $now |
+      .[$id].expires_at = $eat |
+      .[$id].warned_t1 = false |
+      .[$id].warned_t2 = false |
+      .[$id].last_active = $now' "$LEASES_FILE" > "$tmp" && mv "$tmp" "$LEASES_FILE"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -254,6 +339,11 @@ cmd_status() {
         fi
       fi
 
+      local last_active_ts=""
+      if lease_exists "$machine_id"; then
+        last_active_ts=$(lease_get "$machine_id" "last_active")
+      fi
+
       result=$(echo "$result" | jq \
         --arg id "$machine_id" \
         --arg name "$vm_name" \
@@ -261,7 +351,8 @@ cmd_status() {
         --arg state "$state" \
         --arg lease "$lease" \
         --arg remaining "$remaining" \
-        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, managed: true}]')
+        --arg last_active "$last_active_ts" \
+        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, last_active: (if $last_active == "" then null else ($last_active | tonumber) end), managed: true}]')
     done
 
     # Add unmanaged VBox VMs
@@ -291,9 +382,9 @@ cmd_status() {
 
   # Table output
   local has_vms=false
-  printf "\033[1m%-20s %-30s %-10s %-12s %-12s\033[0m\n" \
-    "VM NAME" "PROJECT" "STATE" "LEASE" "TIME LEFT"
-  printf "%s\n" "$(printf '─%.0s' {1..84})"
+  printf "\033[1m%-20s %-30s %-10s %-12s %-12s %-14s\033[0m\n" \
+    "VM NAME" "PROJECT" "STATE" "LEASE" "TIME LEFT" "LAST ACTIVE"
+  printf "%s\n" "$(printf '─%.0s' {1..98})"
 
   for machine_id in $(echo "$machines" | jq -r 'keys[]' 2>/dev/null); do
     has_vms=true
@@ -364,8 +455,15 @@ cmd_status() {
       color="\033[90m"  # gray
     fi
 
-    printf "${color}%-20s %-30s %-10s %-12s %-12s\033[0m\n" \
-      "$vm_name" "$project" "$state" "$lease" "$remaining"
+    local last_active_display="n/a"
+    if lease_exists "$machine_id"; then
+      local last_active_ts
+      last_active_ts=$(lease_get "$machine_id" "last_active")
+      last_active_display=$(format_ago "$last_active_ts")
+    fi
+
+    printf "${color}%-20s %-30s %-10s %-12s %-12s %-14s\033[0m\n" \
+      "$vm_name" "$project" "$state" "$lease" "$remaining" "$last_active_display"
   done
 
   if [ "$has_vms" = false ]; then
@@ -400,6 +498,10 @@ cmd_status() {
 
 cmd_sweep() {
   init_state
+  local skip_activity=false
+  if [ "${1:-}" = "--no-activity" ]; then
+    skip_activity=true
+  fi
 
   # Acquire lock
   if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -482,6 +584,18 @@ cmd_sweep() {
       continue
     fi
 
+    # Activity-based lease reset
+    if [ "$skip_activity" = false ] && [ "$(get_activity_enabled)" = "true" ]; then
+      ensure_metrics_setup "$vbox_uuid"
+      local activity
+      activity=$(check_vm_activity "$vbox_uuid" "$(get_activity_cpu_threshold)")
+      if [ "$activity" = "active" ]; then
+        log "Activity detected on $vm_name, resetting lease"
+        reset_lease_activity "$machine_id"
+        expires_at=$(lease_get "$machine_id" "expires_at")
+      fi
+    fi
+
     local secs_left=$(( expires_at - now ))
 
     # Expired — halt the VM
@@ -515,22 +629,16 @@ cmd_sweep() {
     if [ "$warned_t2" != "true" ] && echo "$ratio >= $t2_ratio" | bc -l 2>/dev/null | grep -q 1; then
       log "T2 warning for $vm_name ($remaining remaining)"
       warning_count=$(( warning_count + 1 ))
-      timeout 10 env VAGRANT_CWD="$vfp" vagrant ssh -c "vmw warn --urgent '$remaining remaining'" 2>/dev/null || {
-        log "Warning: could not deliver T2 warning to $vm_name"
-      }
       lease_set_bool "$machine_id" "warned_t2" "true"
+    fi
+
     # T1 warning check
-    else
-      local warned_t1
-      warned_t1=$(lease_get "$machine_id" "warned_t1")
-      if [ "$warned_t1" != "true" ] && echo "$ratio >= $t1_ratio" | bc -l 2>/dev/null | grep -q 1; then
-        log "T1 warning for $vm_name ($remaining remaining)"
-        warning_count=$(( warning_count + 1 ))
-        timeout 10 env VAGRANT_CWD="$vfp" vagrant ssh -c "vmw warn '$remaining remaining'" 2>/dev/null || {
-          log "Warning: could not deliver T1 warning to $vm_name"
-        }
-        lease_set_bool "$machine_id" "warned_t1" "true"
-      fi
+    local warned_t1
+    warned_t1=$(lease_get "$machine_id" "warned_t1")
+    if [ "$warned_t1" != "true" ] && echo "$ratio >= $t1_ratio" | bc -l 2>/dev/null | grep -q 1; then
+      log "T1 warning for $vm_name ($remaining remaining)"
+      warning_count=$(( warning_count + 1 ))
+      lease_set_bool "$machine_id" "warned_t1" "true"
     fi
   done
 
@@ -566,11 +674,13 @@ cmd_extend() {
     local tmp
     tmp=$(mktemp "${LEASES_FILE}.XXXXXX")
     jq --arg id "$machine_id" \
+       --argjson now "$now" \
        '.[$id].expires_at = null |
         .[$id].duration = "indefinite" |
         .[$id].mode = "indefinite" |
         .[$id].warned_t1 = false |
-        .[$id].warned_t2 = false' "$LEASES_FILE" > "$tmp" && mv "$tmp" "$LEASES_FILE"
+        .[$id].warned_t2 = false |
+        .[$id].last_active = $now' "$LEASES_FILE" > "$tmp" && mv "$tmp" "$LEASES_FILE"
   else
     local new_expires=$(( now + duration_secs ))
     local tmp
@@ -584,7 +694,8 @@ cmd_extend() {
         .[$id].duration = $dur |
         .[$id].mode = "standard" |
         .[$id].warned_t1 = false |
-        .[$id].warned_t2 = false' "$LEASES_FILE" > "$tmp" && mv "$tmp" "$LEASES_FILE"
+        .[$id].warned_t2 = false |
+        .[$id].last_active = $now' "$LEASES_FILE" > "$tmp" && mv "$tmp" "$LEASES_FILE"
   fi
 
   local vm_name
@@ -710,7 +821,7 @@ Commands:
   extend <name|.> [duration] Extend lease (default: 4h from now)
   halt <name|.>              Immediately halt a VM and remove lease
   exempt <name|.>            Exempt a VM from auto-halt
-  sweep                      Run enforcement loop (called by launchd)
+  sweep [--no-activity]      Run enforcement loop (called by launchd)
   install                    Install launchd daemon
   uninstall                  Remove launchd daemon
   tmux-status                Print tmux status bar segment
@@ -729,6 +840,10 @@ Examples:
   vmw extend . 8h         Extend current project's VM by 8 hours
   vmw extend . overnight  Extend until tomorrow morning
   vmw halt .              Halt current project's VM now
+
+Activity detection:
+  Sweep checks running VMs for CPU activity via VBoxManage metrics
+  and resets leases for active VMs. Disable via config: activity_detection.enabled = false
 EOF
 }
 
