@@ -2,6 +2,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.0.0](https://github.com/strubio-ray/vm-ward/compare/b24bf8fea4c786c1a178d45d16f31c6a9f05f570..v1.0.0) - 2026-03-12
+#### Documentation
+- update README and CLAUDE.md for host-only refactor - ([d4263d3](https://github.com/strubio-ray/vm-ward/commit/d4263d302e9fd6b2d697ef988e6fd0af657a8e0d)) - Steven
+- note brew update requirement in CLAUDE.md - ([b24bf8f](https://github.com/strubio-ray/vm-ward/commit/b24bf8fea4c786c1a178d45d16f31c6a9f05f570)) - Steven
+#### Refactoring
+- replace SSH activity detection with VBoxManage metrics - ([a7d7d38](https://github.com/strubio-ray/vm-ward/commit/a7d7d38a02072bd413df621b0e682f1a282dfff9)) - Steven
+#### Miscellaneous Chores
+- add gitignore and commit format_ago helper - ([1100b99](https://github.com/strubio-ray/vm-ward/commit/1100b99c43f207a38a539c5c81bcee21d35e8b94)) - Steven
+
+- - -
+
 ## [v0.1.3](https://github.com/strubio-ray/vm-ward/compare/4b8e8b297e0513d670fd967873dfa64f08c5e8ba..v0.1.3) - 2026-03-11
 #### Bug Fixes
 - correct VM status detection by resolving VBox UUIDs - ([4b8e8b2](https://github.com/strubio-ray/vm-ward/commit/4b8e8b297e0513d670fd967873dfa64f08c5e8ba)) - Steven
