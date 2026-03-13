@@ -413,9 +413,10 @@ cmd_status() {
         esac
       fi
 
-      local last_active_ts=""
+      local last_active_ts="" duration_val=""
       if lease_exists "$machine_id"; then
         last_active_ts=$(lease_get "$machine_id" "last_active")
+        duration_val=$(lease_get "$machine_id" "duration")
       fi
 
       result=$(echo "$result" | jq \
@@ -427,7 +428,8 @@ cmd_status() {
         --arg remaining "$remaining" \
         --arg last_active "$last_active_ts" \
         --arg halted_at "$halted_at_val" \
-        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, last_active: (if $last_active == "" then null else ($last_active | tonumber) end), halted_at: (if $halted_at == "" then null else ($halted_at | tonumber) end), managed: true}]')
+        --arg duration "$duration_val" \
+        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, duration: (if $duration == "" then null else $duration end), last_active: (if $last_active == "" then null else ($last_active | tonumber) end), halted_at: (if $halted_at == "" then null else ($halted_at | tonumber) end), managed: true}]')
     done
 
     # Add unmanaged VBox VMs
@@ -520,7 +522,8 @@ cmd_status() {
           color="\033[31m"  # red
         else
           lease="active"
-          remaining=$(format_remaining "$secs_left")
+          local orig_dur; orig_dur=$(lease_get "$machine_id" "duration")
+          remaining="$(format_remaining "$secs_left") ($orig_dur)"
           local elapsed=$(( now - created_at ))
           local ratio
           if [ "$duration_secs" -gt 0 ]; then
