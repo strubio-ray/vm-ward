@@ -12,5 +12,4 @@ Vagrantfile
 !.vm/overlay-dirs.yml
 !.vm/worktree-files.yml
 !.vm/worktree-setup.sh
-.claude/
 # END agent-sandbox managed

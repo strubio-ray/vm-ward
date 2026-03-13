@@ -5,7 +5,7 @@
 #
 # Format:
 #   paths:
-#     - relative/path    # Relative to /agent-workspace
+#     - relative/path    # Relative to /vm-vm-ward
 #
 # After changes, run: vagrant reload
 # =============================================================================
