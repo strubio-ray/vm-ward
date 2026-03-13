@@ -46,6 +46,27 @@ get_activity_cpu_threshold() {
   config_get '.activity_detection.cpu_threshold' "5"
 }
 
+daemon_status() {
+  local plist_dst="$HOME/Library/LaunchAgents/com.strubio.vm-ward.plist"
+  if [ ! -f "$plist_dst" ]; then
+    echo "not-installed"
+    return
+  fi
+  local line
+  line=$(launchctl list 2>/dev/null | grep 'com.strubio.vm-ward' || true)
+  if [ -z "$line" ]; then
+    echo "not-running"
+    return
+  fi
+  local pid
+  pid=$(echo "$line" | awk '{print $1}')
+  if [ "$pid" != "-" ] && [ -n "$pid" ]; then
+    echo "running $pid"
+  else
+    echo "loaded"
+  fi
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Vagrant machine index helpers
 # ─────────────────────────────────────────────────────────────────────────────
@@ -306,6 +327,19 @@ cmd_status() {
 
   if [ "$json_output" = true ]; then
     # JSON output mode
+    local daemon_st
+    daemon_st=$(daemon_status)
+    local daemon_json
+    case "$daemon_st" in
+      running\ *)
+        local daemon_pid="${daemon_st#running }"
+        daemon_json=$(jq -nc --arg state "running" --argjson pid "$daemon_pid" '{state: $state, pid: $pid}')
+        ;;
+      *)
+        daemon_json=$(jq -nc --arg state "$daemon_st" '{state: $state, pid: null}')
+        ;;
+    esac
+
     local result="[]"
     for machine_id in $(echo "$machines" | jq -r 'keys[]' 2>/dev/null); do
       local vfp vm_name provider state machine_name vbox_uuid
@@ -376,7 +410,8 @@ cmd_status() {
       done <<< "$all_vbox_vms"
     fi
 
-    echo "$result" | jq .
+    jq -nc --argjson daemon "$daemon_json" --argjson vms "$result" \
+      '{daemon: $daemon, vms: $vms}'
     return
   fi
 
@@ -494,6 +529,26 @@ cmd_status() {
         "$vm_display_name" "${vm_uuid:0:8}..." "$vm_state"
     done <<< "$all_vbox_vms"
   fi
+
+  # Daemon health footer
+  printf "\n"
+  local daemon_st
+  daemon_st=$(daemon_status)
+  case "$daemon_st" in
+    running\ *)
+      local daemon_pid="${daemon_st#running }"
+      printf "\033[32mDaemon: running (PID %s)\033[0m\n" "$daemon_pid"
+      ;;
+    loaded)
+      printf "\033[33mDaemon: loaded (no active PID)\033[0m\n"
+      ;;
+    not-running)
+      printf "\033[33m⚠ Daemon not running — run 'vmw install'\033[0m\n"
+      ;;
+    not-installed)
+      printf "\033[31m⚠ Daemon not installed — run 'vmw install'\033[0m\n"
+      ;;
+  esac
 }
 
 cmd_sweep() {
