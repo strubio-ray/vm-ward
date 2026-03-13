@@ -2,6 +2,26 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.1.0](https://github.com/strubio-ray/vm-ward/compare/47c36506fef2cd080e7f57c8bf6b934ce0d6a8a6..v1.1.0) - 2026-03-13
+#### Features
+- (**events**) add structured event log - ([802e50f](https://github.com/strubio-ray/vm-ward/commit/802e50fbcd8ef733017cc5a2365f12b2d539b9fa)) - Steven
+- (**lease**) add halted mode tracking - ([08703ab](https://github.com/strubio-ray/vm-ward/commit/08703abb921ac358ed06937b7d22b91ae6acf866)) - Steven
+- (**status**) split active and recently halted sections - ([b62c84f](https://github.com/strubio-ray/vm-ward/commit/b62c84fd65213c74ebc2ebbeafcc2e7d89ff59e3)) - Steven
+- (**status**) show original duration in time remaining - ([55a6907](https://github.com/strubio-ray/vm-ward/commit/55a690718c7f6b400aa3865752152c507cb47792)) - Steven
+- (**status**) add pending lease state - ([a31b7cc](https://github.com/strubio-ray/vm-ward/commit/a31b7cc87a132ebfaa13aee86247dc6d8d2ea464)) - Steven
+- (**status**) add last sweep timestamp - ([6c4345c](https://github.com/strubio-ray/vm-ward/commit/6c4345c4b5641520e754403a88cde9ba861a1eae)) - Steven
+- (**status**) add daemon health detection - ([0649da6](https://github.com/strubio-ray/vm-ward/commit/0649da68c2bdb106ff6d20b24f384616a59efb14)) - Steven
+- (**sweep**) add stale lease cleanup - ([23b0664](https://github.com/strubio-ray/vm-ward/commit/23b06642f2eb6328c457945327f74353bc0bc052)) - Steven
+#### Bug Fixes
+- (**status**) handle expired leases in JSON output - ([cd60aa0](https://github.com/strubio-ray/vm-ward/commit/cd60aa04a7f83a2023a124c1a991eac7b6c0ec31)) - Steven
+- restore .vm/* glob pattern in gitignore - ([47c3650](https://github.com/strubio-ray/vm-ward/commit/47c36506fef2cd080e7f57c8bf6b934ce0d6a8a6)) - Steven
+#### Documentation
+- update CLAUDE.md for status observability features - ([5f270c2](https://github.com/strubio-ray/vm-ward/commit/5f270c2d540b316870f11d3e36ff6fd727cbf503)) - Steven
+#### Miscellaneous Chores
+- track vm sandbox configuration files - ([0a1b47b](https://github.com/strubio-ray/vm-ward/commit/0a1b47b5d6b54339549aa663b88b098637ee2845)) - Steven
+
+- - -
+
 ## [v1.0.0](https://github.com/strubio-ray/vm-ward/compare/b24bf8fea4c786c1a178d45d16f31c6a9f05f570..v1.0.0) - 2026-03-12
 #### Documentation
 - update README and CLAUDE.md for host-only refactor - ([d4263d3](https://github.com/strubio-ray/vm-ward/commit/d4263d302e9fd6b2d697ef988e6fd0af657a8e0d)) - Steven
