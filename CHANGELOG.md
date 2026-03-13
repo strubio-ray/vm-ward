@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.2.0](https://github.com/strubio-ray/vm-ward/compare/6ac2ca4887a2792976f60ce89ba7b324569b7a8d..v1.2.0) - 2026-03-13
+#### Features
+- add interactive TUI dashboard and destroy command - ([997ae73](https://github.com/strubio-ray/vm-ward/commit/997ae73fb14da02f0a5767aa91358a29eb1f51c3)) - Steven
+#### Miscellaneous Chores
+- (**vm**) update version - ([6ac2ca4](https://github.com/strubio-ray/vm-ward/commit/6ac2ca4887a2792976f60ce89ba7b324569b7a8d)) - Steven
+- add .claude/ to gitignore - ([8b729f4](https://github.com/strubio-ray/vm-ward/commit/8b729f4c17c800d57fe3fdfddf794e94cada9ab9)) - Steven
+
+- - -
+
 ## [v1.1.1](https://github.com/strubio-ray/vm-ward/compare/8df4a34ed932d38465cf5056c1238d114c8a850f..v1.1.1) - 2026-03-13
 #### Bug Fixes
 - (**install**) harden launchd install flow for macOS 26 - ([83580c8](https://github.com/strubio-ray/vm-ward/commit/83580c87601089ba2a543f9fa21ffa075405f5fa)) - Steven
