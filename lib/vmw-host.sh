@@ -410,8 +410,14 @@ cmd_status() {
       done <<< "$all_vbox_vms"
     fi
 
+    local last_sweep_json="null"
+    if [ -f "${VMW_STATE_DIR}/last-sweep" ]; then
+      last_sweep_json=$(cat "${VMW_STATE_DIR}/last-sweep")
+    fi
+
     jq -nc --argjson daemon "$daemon_json" --argjson vms "$result" \
-      '{daemon: $daemon, vms: $vms}'
+      --argjson last_sweep "$last_sweep_json" \
+      '{daemon: $daemon, last_sweep: $last_sweep, vms: $vms}'
     return
   fi
 
@@ -530,8 +536,26 @@ cmd_status() {
     done <<< "$all_vbox_vms"
   fi
 
-  # Daemon health footer
+  # Footer
   printf "\n"
+
+  # Last sweep
+  if [ -f "${VMW_STATE_DIR}/last-sweep" ]; then
+    local last_sweep_ts
+    last_sweep_ts=$(cat "${VMW_STATE_DIR}/last-sweep")
+    local sweep_age=$(( now - last_sweep_ts ))
+    local sweep_ago
+    sweep_ago=$(format_ago "$last_sweep_ts")
+    if [ "$sweep_age" -gt 600 ]; then
+      printf "\033[33mLast sweep: %s ⚠ (overdue)\033[0m\n" "$sweep_ago"
+    else
+      printf "Last sweep: %s\n" "$sweep_ago"
+    fi
+  else
+    printf "\033[90mLast sweep: never\033[0m\n"
+  fi
+
+  # Daemon health
   local daemon_st
   daemon_st=$(daemon_status)
   case "$daemon_st" in
@@ -710,6 +734,7 @@ cmd_sweep() {
   done
 
   update_tmux_cache "$running_count" "$warning_count"
+  epoch_now > "${VMW_STATE_DIR}/last-sweep"
 }
 
 cmd_extend() {
