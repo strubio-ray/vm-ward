@@ -7,6 +7,7 @@ VMW_STATE_DIR="${VMW_STATE_DIR:-$HOME/.local/state/vm-ward}"
 VMW_CONFIG_DIR="${VMW_CONFIG_DIR:-$HOME/.config/vm-ward}"
 LEASES_FILE="${VMW_STATE_DIR}/leases.json"
 LOCK_DIR="${VMW_STATE_DIR}/sweep.lock"
+EVENTS_FILE="${VMW_STATE_DIR}/events.jsonl"
 TMUX_CACHE="${VMW_STATE_DIR}/tmux-cache.txt"
 MACHINE_INDEX="${VAGRANT_HOME:-$HOME/.vagrant.d}/data/machine-index/index"
 
@@ -191,6 +192,23 @@ lease_set_halted() {
   jq --arg id "$machine_id" --argjson now "$now" \
     '.[$id].mode = "halted" | .[$id].expires_at = null | .[$id].halted_at = $now' \
     "$LEASES_FILE" > "$tmp" && mv "$tmp" "$LEASES_FILE"
+}
+
+event_log() {
+  local type="$1" vm_name="$2" machine_id="$3" detail="${4:-}"
+  local now
+  now=$(epoch_now)
+  printf '%s\n' "$(jq -nc --argjson ts "$now" --arg type "$type" \
+    --arg vm "$vm_name" --arg mid "$machine_id" --arg det "$detail" \
+    '{ts: $ts, type: $type, vm_name: $vm, machine_id: $mid, detail: $det}')" >> "$EVENTS_FILE"
+  # Trim to 500 lines
+  if [ -f "$EVENTS_FILE" ]; then
+    local lc; lc=$(wc -l < "$EVENTS_FILE")
+    if [ "$lc" -gt 500 ]; then
+      local tmp; tmp=$(mktemp "${EVENTS_FILE}.XXXXXX")
+      tail -n 500 "$EVENTS_FILE" > "$tmp" && mv "$tmp" "$EVENTS_FILE"
+    fi
+  fi
 }
 
 create_lease() {
@@ -431,9 +449,15 @@ cmd_status() {
       last_sweep_json=$(cat "${VMW_STATE_DIR}/last-sweep")
     fi
 
+    local recent_events="[]"
+    if [ -f "$EVENTS_FILE" ]; then
+      recent_events=$(tail -n 5 "$EVENTS_FILE" | jq -sc '.')
+    fi
+
     jq -nc --argjson daemon "$daemon_json" --argjson vms "$result" \
       --argjson last_sweep "$last_sweep_json" \
-      '{daemon: $daemon, last_sweep: $last_sweep, vms: $vms}'
+      --argjson events "$recent_events" \
+      '{daemon: $daemon, last_sweep: $last_sweep, recent_events: $events, vms: $vms}'
     return
   fi
 
@@ -597,6 +621,29 @@ cmd_status() {
       printf "\033[31m⚠ Daemon not installed — run 'vmw install'\033[0m\n"
       ;;
   esac
+
+  # Recent events
+  if [ -f "$EVENTS_FILE" ]; then
+    local event_lines
+    event_lines=$(tail -n 5 "$EVENTS_FILE")
+    if [ -n "$event_lines" ]; then
+      printf "\n\033[2mRecent events:\033[0m\n"
+      while IFS= read -r event_line; do
+        local ev_ts ev_type ev_vm ev_detail
+        ev_ts=$(echo "$event_line" | jq -r '.ts' 2>/dev/null)
+        ev_type=$(echo "$event_line" | jq -r '.type' 2>/dev/null)
+        ev_vm=$(echo "$event_line" | jq -r '.vm_name' 2>/dev/null)
+        ev_detail=$(echo "$event_line" | jq -r '.detail // ""' 2>/dev/null)
+        local ev_ago
+        ev_ago=$(format_ago "$ev_ts")
+        if [ -n "$ev_detail" ]; then
+          printf "  \033[90m%-12s %-16s %-20s %s\033[0m\n" "$ev_ago" "$ev_type" "$ev_vm" "$ev_detail"
+        else
+          printf "  \033[90m%-12s %-16s %-20s\033[0m\n" "$ev_ago" "$ev_type" "$ev_vm"
+        fi
+      done <<< "$event_lines"
+    fi
+  fi
 }
 
 cmd_sweep() {
@@ -671,6 +718,7 @@ cmd_sweep() {
     if ! lease_exists "$machine_id"; then
       log "Creating retroactive lease for $vm_name ($machine_id) with duration $default_dur"
       create_lease "$machine_id" "$vfp" "$vm_name" "$provider" "$default_dur"
+      event_log "lease_created" "$vm_name" "$machine_id" "retroactive, duration=$default_dur"
     fi
 
     local mode
@@ -695,6 +743,7 @@ cmd_sweep() {
       if [ "$activity" = "active" ]; then
         log "Activity detected on $vm_name, resetting lease"
         reset_lease_activity "$machine_id"
+        event_log "lease_reset" "$vm_name" "$machine_id" "activity detected"
         expires_at=$(lease_get "$machine_id" "expires_at")
       fi
     fi
@@ -708,6 +757,7 @@ cmd_sweep() {
         log "Warning: vagrant halt failed for $vm_name"
       }
       lease_set_halted "$machine_id"
+      event_log "halted" "$vm_name" "$machine_id" "lease expired"
       continue
     fi
 
@@ -804,6 +854,7 @@ cmd_extend() {
 
   local vm_name
   vm_name=$(lease_get "$machine_id" "vm_name")
+  event_log "lease_extended" "$vm_name" "$machine_id" "$duration"
   echo "Extended $vm_name lease: $duration from now"
 }
 
@@ -829,6 +880,7 @@ cmd_halt() {
   echo "Halting $vm_name..."
   VAGRANT_CWD="$vfp" vagrant halt 2>&1 || die "Failed to halt $vm_name"
   lease_set_halted "$machine_id"
+  event_log "halted" "$vm_name" "$machine_id" "manual"
   echo "Halted $vm_name and removed lease."
 }
 
@@ -846,6 +898,7 @@ cmd_exempt() {
 
   local vm_name
   vm_name=$(lease_get "$machine_id" "vm_name")
+  event_log "lease_exempted" "$vm_name" "$machine_id" ""
   echo "Exempted $vm_name from auto-halt."
 }
 
