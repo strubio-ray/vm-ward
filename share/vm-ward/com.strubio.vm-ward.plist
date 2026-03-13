@@ -23,5 +23,13 @@
   <string>{{HOME}}/.local/state/vm-ward/sweep.log</string>
   <key>RunAtLoad</key>
   <true/>
+  <key>LimitLoadToSessionType</key>
+  <array>
+    <string>Aqua</string>
+    <string>Background</string>
+    <string>LoginWindow</string>
+    <string>StandardIO</string>
+    <string>System</string>
+  </array>
 </dict>
 </plist>

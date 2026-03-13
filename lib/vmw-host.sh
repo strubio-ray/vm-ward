@@ -1004,9 +1004,17 @@ cmd_install() {
   # Load with modern launchctl API
   local uid
   uid=$(id -u)
-  launchctl bootstrap "gui/${uid}" "$plist_dst" 2>/dev/null || {
-    # Try legacy API as fallback
-    launchctl load "$plist_dst" 2>/dev/null || die "Failed to load launchd plist"
+
+  # Remove any existing service first (idempotent reinstall)
+  launchctl bootout "gui/${uid}/com.strubio.vm-ward" 2>/dev/null || true
+
+  # Enable the service before bootstrap (matches Homebrew's pattern)
+  launchctl enable "gui/${uid}/com.strubio.vm-ward"
+
+  # Bootstrap into the GUI domain
+  local lctl_err
+  lctl_err=$(launchctl bootstrap "gui/${uid}" "$plist_dst" 2>&1) || {
+    die "Failed to load launchd plist: ${lctl_err:-unknown error}"
   }
 
   echo "vm-ward daemon installed and started."
@@ -1019,9 +1027,7 @@ cmd_uninstall() {
 
   local uid
   uid=$(id -u)
-  launchctl bootout "gui/${uid}/com.strubio.vm-ward" 2>/dev/null || {
-    launchctl unload "$plist_dst" 2>/dev/null || true
-  }
+  launchctl bootout "gui/${uid}/com.strubio.vm-ward" 2>/dev/null || true
 
   rm -f "$plist_dst"
   echo "vm-ward daemon uninstalled."
