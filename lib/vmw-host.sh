@@ -419,6 +419,11 @@ cmd_status() {
         duration_val=$(lease_get "$machine_id" "duration")
       fi
 
+      local section="active"
+      if [ "$lease" = "halted" ] || { [ "$state" = "poweroff" ] && { [ "$lease" = "expired" ] || [ "$lease" = "none" ]; }; }; then
+        section="halted"
+      fi
+
       result=$(echo "$result" | jq \
         --arg id "$machine_id" \
         --arg name "$vm_name" \
@@ -429,7 +434,8 @@ cmd_status() {
         --arg last_active "$last_active_ts" \
         --arg halted_at "$halted_at_val" \
         --arg duration "$duration_val" \
-        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, duration: (if $duration == "" then null else $duration end), last_active: (if $last_active == "" then null else ($last_active | tonumber) end), halted_at: (if $halted_at == "" then null else ($halted_at | tonumber) end), managed: true}]')
+        --arg section "$section" \
+        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, duration: (if $duration == "" then null else $duration end), last_active: (if $last_active == "" then null else ($last_active | tonumber) end), halted_at: (if $halted_at == "" then null else ($halted_at | tonumber) end), managed: true, section: $section}]')
     done
 
     # Add unmanaged VBox VMs
@@ -472,9 +478,8 @@ cmd_status() {
 
   # Table output
   local has_vms=false
-  printf "\033[1m%-20s %-30s %-10s %-12s %-12s %-14s\033[0m\n" \
-    "VM NAME" "PROJECT" "STATE" "LEASE" "TIME LEFT" "LAST ACTIVE"
-  printf "%s\n" "$(printf '─%.0s' {1..98})"
+  local -a active_lines=()
+  local -a halted_lines=()
 
   for machine_id in $(echo "$machines" | jq -r 'keys[]' 2>/dev/null); do
     has_vms=true
@@ -496,9 +501,9 @@ cmd_status() {
       state="poweroff"
     fi
 
-    local lease="none" remaining="n/a" color="\033[0m"
+    local lease="none" remaining="n/a" color="\033[0m" mode=""
     if lease_exists "$machine_id"; then
-      local mode expires_at
+      local expires_at
       mode=$(lease_get "$machine_id" "mode")
       expires_at=$(lease_get "$machine_id" "expires_at")
       if [ "$mode" = "halted" ]; then
@@ -568,12 +573,36 @@ cmd_status() {
       last_active_display=$(format_ago "$last_active_ts")
     fi
 
-    printf "${color}%-20s %-30s %-10s %-12s %-12s %-14s\033[0m\n" \
-      "$vm_name" "$project" "$state" "$lease" "$remaining" "$last_active_display"
+    local formatted_line
+    formatted_line=$(printf "${color}%-20s %-30s %-10s %-12s %-12s %-14s\033[0m" \
+      "$vm_name" "$project" "$state" "$lease" "$remaining" "$last_active_display")
+
+    local section="active"
+    if [ "$lease" = "halted" ] || { [ "$state" = "poweroff" ] && { [ "$lease" = "expired" ] || [ "$lease" = "none" ]; }; }; then
+      section="halted"
+    fi
+
+    if [ "$section" = "active" ]; then
+      active_lines+=("$formatted_line")
+    else
+      halted_lines+=("$formatted_line")
+    fi
   done
 
   if [ "$has_vms" = false ]; then
     echo "No VMs found in Vagrant machine index."
+  else
+    printf "\033[1m%-20s %-30s %-10s %-12s %-12s %-14s\033[0m\n" \
+      "VM NAME" "PROJECT" "STATE" "LEASE" "TIME LEFT" "LAST ACTIVE"
+    printf "%s\n" "$(printf '─%.0s' {1..98})"
+
+    for line in "${active_lines[@]}"; do echo "$line"; done
+
+    if [ "${#halted_lines[@]}" -gt 0 ]; then
+      printf "\n\033[2;3m%-20s\033[0m\n" "RECENTLY HALTED / EXPIRED"
+      printf "\033[2m%s\033[0m\n" "$(printf '─%.0s' {1..98})"
+      for line in "${halted_lines[@]}"; do echo "$line"; done
+    fi
   fi
 
   # Show unmanaged VBox VMs
