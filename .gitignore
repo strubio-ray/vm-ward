@@ -13,4 +13,5 @@ Vagrantfile
 !.vm/worktree-files.yml
 !.vm/worktree-setup.sh
 bin/vmw-tui
+.claude/
 # END agent-sandbox managed
