@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.1.1](https://github.com/strubio-ray/vm-ward/compare/8df4a34ed932d38465cf5056c1238d114c8a850f..v1.1.1) - 2026-03-13
+#### Bug Fixes
+- (**install**) harden launchd install flow for macOS 26 - ([83580c8](https://github.com/strubio-ray/vm-ward/commit/83580c87601089ba2a543f9fa21ffa075405f5fa)) - Steven
+- (**status**) guard empty active_lines array for set -u compatibility - ([8df4a34](https://github.com/strubio-ray/vm-ward/commit/8df4a34ed932d38465cf5056c1238d114c8a850f)) - Steven
+
+- - -
+
 ## [v1.1.0](https://github.com/strubio-ray/vm-ward/compare/47c36506fef2cd080e7f57c8bf6b934ce0d6a8a6..v1.1.0) - 2026-03-13
 #### Features
 - (**events**) add structured event log - ([802e50f](https://github.com/strubio-ray/vm-ward/commit/802e50fbcd8ef733017cc5a2365f12b2d539b9fa)) - Steven
