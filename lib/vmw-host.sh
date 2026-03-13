@@ -73,6 +73,20 @@ daemon_status() {
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Read machine index and output machine entries as JSON
+remove_from_machine_index() {
+  local machine_id="$1"
+  if [ ! -f "$MACHINE_INDEX" ]; then
+    return
+  fi
+  # Only remove if the entry exists
+  if ! jq -e --arg id "$machine_id" '.machines[$id]' "$MACHINE_INDEX" >/dev/null 2>&1; then
+    return
+  fi
+  local tmp
+  tmp=$(mktemp "${MACHINE_INDEX}.XXXXXX")
+  jq --arg id "$machine_id" '.machines |= del(.[$id])' "$MACHINE_INDEX" > "$tmp" && mv "$tmp" "$MACHINE_INDEX"
+}
+
 read_machine_index() {
   if [ ! -f "$MACHINE_INDEX" ]; then
     echo '{}'
@@ -127,10 +141,25 @@ resolve_vm() {
     return
   fi
 
-  # Search by vm_name in machine index
+  # Try as a direct machine ID first
   local machines
   machines=$(read_machine_index)
+  if echo "$machines" | jq -e --arg id "$name" 'has($id)' >/dev/null 2>&1; then
+    echo "$name"
+    return
+  fi
+
+  # Try as a vagrantfile path
   local machine_id
+  machine_id=$(echo "$machines" | jq -r --arg path "$name" '
+    to_entries[] | select(.value.vagrantfile_path == $path) | .key
+  ' 2>/dev/null | head -1)
+  if [ -n "$machine_id" ]; then
+    echo "$machine_id"
+    return
+  fi
+
+  # Search by vm_name in machine index
   machine_id=$(echo "$machines" | jq -r --arg name "$name" '
     to_entries[] | select(.value.extra_data.box.name // .value.name // "" | test($name; "i")) | .key
   ' 2>/dev/null | head -1)
@@ -387,11 +416,12 @@ cmd_status() {
         state="poweroff"
       fi
 
-      local lease="none" remaining="n/a" halted_at_val=""
+      local lease="none" remaining="n/a" halted_at_val="" expires_at_val=""
       if lease_exists "$machine_id"; then
         local mode expires_at
         mode=$(lease_get "$machine_id" "mode")
         expires_at=$(lease_get "$machine_id" "expires_at")
+        expires_at_val="$expires_at"
         if [ "$mode" = "halted" ]; then
           lease="halted"
           remaining="n/a"
@@ -418,10 +448,11 @@ cmd_status() {
         esac
       fi
 
-      local last_active_ts="" duration_val=""
+      local last_active_ts="" duration_val="" last_activity_val=""
       if lease_exists "$machine_id"; then
         last_active_ts=$(lease_get "$machine_id" "last_active")
         duration_val=$(lease_get "$machine_id" "duration")
+        last_activity_val=$(lease_get "$machine_id" "last_activity")
       fi
 
       local section="active"
@@ -440,7 +471,9 @@ cmd_status() {
         --arg halted_at "$halted_at_val" \
         --arg duration "$duration_val" \
         --arg section "$section" \
-        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, duration: (if $duration == "" then null else $duration end), last_active: (if $last_active == "" then null else ($last_active | tonumber) end), halted_at: (if $halted_at == "" then null else ($halted_at | tonumber) end), managed: true, section: $section}]')
+        --arg expires_at_val "$expires_at_val" \
+        --arg last_activity "$last_activity_val" \
+        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, duration: (if $duration == "" then null else $duration end), last_active: (if $last_active == "" then null else ($last_active | tonumber) end), halted_at: (if $halted_at == "" then null else ($halted_at | tonumber) end), managed: true, section: $section, expires_at: (if $expires_at_val == "" or $expires_at_val == "null" then null else ($expires_at_val | tonumber) end), last_activity: (if $last_activity == "" then null else $last_activity end)}]')
     done
 
     # Add unmanaged VBox VMs
@@ -793,6 +826,7 @@ cmd_sweep() {
       ensure_metrics_setup "$vbox_uuid"
       local activity
       activity=$(check_vm_activity "$vbox_uuid" "$(get_activity_cpu_threshold)")
+      lease_set "$machine_id" "last_activity" "$activity"
       if [ "$activity" = "active" ]; then
         log "Activity detected on $vm_name, resetting lease"
         reset_lease_activity "$machine_id"
@@ -960,6 +994,72 @@ cmd_halt() {
   echo "Halted $vm_name and removed lease."
 }
 
+cmd_destroy() {
+  init_state
+  local name="${1:-.}"
+  local machine_id
+  machine_id=$(resolve_vm "$name")
+
+  local vfp=""
+  local vm_name=""
+  local machine_name="default"
+
+  # Gather VM info from lease
+  if lease_exists "$machine_id"; then
+    vfp=$(lease_get "$machine_id" "vagrantfile_path")
+    vm_name=$(lease_get "$machine_id" "vm_name")
+  fi
+
+  # Fall back to machine index
+  if [ -z "$vfp" ] || [ -z "$vm_name" ]; then
+    local machines
+    machines=$(read_machine_index)
+    [ -z "$vfp" ] && vfp=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].vagrantfile_path // ""')
+    [ -z "$vm_name" ] && vm_name=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].extra_data.box.name // .[$id].name // "unknown"')
+    machine_name=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].name // "default"')
+  fi
+
+  if [ -z "$vfp" ]; then
+    die "Cannot determine Vagrantfile path for $machine_id"
+  fi
+
+  echo "Destroying $vm_name..."
+
+  if [ -d "$vfp" ]; then
+    # Normal path: directory exists, use vagrant destroy
+    VAGRANT_CWD="$vfp" vagrant destroy -f 2>&1 || die "Failed to destroy $vm_name"
+  else
+    # Directory is gone — try VBoxManage fallback
+    echo "Vagrantfile directory no longer exists: $vfp"
+    local vbox_uuid
+    vbox_uuid=$(resolve_vbox_uuid "$vfp" "$machine_name")
+    if [ -n "$vbox_uuid" ] && command -v VBoxManage >/dev/null 2>&1; then
+      # Check if VM is still registered in VirtualBox
+      if VBoxManage showvminfo "$vbox_uuid" >/dev/null 2>&1; then
+        echo "Removing VM via VBoxManage (UUID: $vbox_uuid)..."
+        VBoxManage unregistervm "$vbox_uuid" --delete 2>&1 || {
+          echo "Warning: VBoxManage unregistervm failed, continuing with cleanup"
+        }
+      else
+        echo "VM not registered in VirtualBox, cleaning up vm-ward state only."
+      fi
+    else
+      echo "No VirtualBox UUID found, cleaning up vm-ward state only."
+    fi
+  fi
+
+  # Remove lease if one exists
+  if lease_exists "$machine_id"; then
+    lease_remove "$machine_id"
+  fi
+
+  # Remove from Vagrant machine index
+  remove_from_machine_index "$machine_id"
+
+  event_log "destroyed" "$vm_name" "$machine_id" "manual"
+  echo "Destroyed $vm_name and removed lease."
+}
+
 cmd_exempt() {
   init_state
   local name="${1:-.}"
@@ -1059,6 +1159,7 @@ Commands:
   status [--json]            Show all VMs and lease status
   extend <name|.> [duration] Extend lease (default: 4h from now)
   halt <name|.>              Immediately halt a VM and remove lease
+  destroy <name|.>           Destroy a VM, delete its disk, and remove lease
   exempt <name|.>            Exempt a VM from auto-halt
   sweep [--no-activity]      Run enforcement loop (called by launchd)
   install                    Install launchd daemon
@@ -1094,10 +1195,18 @@ main() {
     status)      cmd_status "$@" ;;
     extend)      cmd_extend "$@" ;;
     halt)        cmd_halt "$@" ;;
+    destroy)     cmd_destroy "$@" ;;
     exempt)      cmd_exempt "$@" ;;
     sweep)       cmd_sweep "$@" ;;
     install)     cmd_install "$@" ;;
     uninstall)   cmd_uninstall "$@" ;;
+    tui)
+      local tui_bin="${VMW_ROOT}/bin/vmw-tui"
+      if [ ! -x "$tui_bin" ]; then
+        die "TUI binary not found. Install via 'brew upgrade vm-ward' or build with 'cd tui && go build -o ../bin/vmw-tui'"
+      fi
+      VMW_PATH="${VMW_ROOT}/bin/vmw" exec "$tui_bin" "$@"
+      ;;
     tmux-status) cmd_tmux_status "$@" ;;
     version)     vmw_version ;;
     help|--help|-h) cmd_help ;;
