@@ -14,9 +14,11 @@ share/vm-ward/       # launchd plist template
 ## Key Concepts
 
 - **Vagrant machine IDs** (hex hashes) ≠ **VirtualBox UUIDs** (dashed format). Use `resolve_vbox_uuid()` to bridge them.
-- **Leases** track how long a VM is allowed to run. Stored in `~/.local/state/vm-ward/leases.json`.
-- **Sweep** runs every 5 min via launchd — warns at T1 (50%) and T2 (87.5%), halts on expiry. Activity detection uses `VBoxManage metrics query` (host-side CPU%). First sweep after VM start returns "idle" (metrics need one sampling period to populate).
+- **Leases** track how long a VM is allowed to run. Stored in `~/.local/state/vm-ward/leases.json`. Lease modes: `standard` (timed), `indefinite`, `exempt`, `halted` (post-halt with `halted_at` timestamp).
+- **Sweep** runs every 5 min via launchd — warns at T1 (50%) and T2 (87.5%), halts on expiry. Activity detection uses `VBoxManage metrics query` (host-side CPU%). First sweep after VM start returns "idle" (metrics need one sampling period to populate). Writes epoch to `last-sweep` after each run. Cleans up halted leases >24h old and expired standard leases for poweroff VMs.
+- **Event log**: `~/.local/state/vm-ward/events.jsonl` — structured JSONL log of lease/halt events, auto-trimmed to 500 lines.
 - **Version placeholder**: `bin/vmw` contains `VMW_VERSION="%%VERSION%%"` — injected by Homebrew formula at install time.
+- **Status JSON schema**: `vmw status --json` returns `{daemon, last_sweep, recent_events, vms}` wrapper object (not a bare array). Each VM includes `section` (`active`|`halted`), `duration`, and `halted_at` fields.
 
 ## Release Flow
 
