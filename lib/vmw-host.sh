@@ -401,8 +401,13 @@ cmd_status() {
           remaining="$mode"
         elif [ -n "$expires_at" ] && [ "$expires_at" != "null" ]; then
           local secs_left=$(( expires_at - now ))
-          lease="active"
-          remaining=$(format_remaining "$secs_left")
+          if [ "$secs_left" -le 0 ]; then
+            lease="expired"
+            remaining="expired"
+          else
+            lease="active"
+            remaining=$(format_remaining "$secs_left")
+          fi
         fi
       fi
 
