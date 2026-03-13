@@ -807,6 +807,29 @@ cmd_sweep() {
     fi
   done
 
+  # Clean up halted leases older than 24h
+  for lease_id in $(jq -r 'to_entries[] | select(.value.mode == "halted") | .key' "$LEASES_FILE" 2>/dev/null); do
+    local halted_at
+    halted_at=$(lease_get "$lease_id" "halted_at")
+    if [ -n "$halted_at" ] && [ $(( now - halted_at )) -gt 86400 ]; then
+      log "Removing stale halted lease for $lease_id (halted >24h ago)"
+      lease_remove "$lease_id"
+    fi
+  done
+
+  # Clean up expired standard leases for poweroff VMs
+  for lease_id in $(jq -r --argjson now "$now" 'to_entries[] | select(.value.mode == "standard" and .value.expires_at != null and (.value.expires_at | tonumber) < $now) | .key' "$LEASES_FILE" 2>/dev/null); do
+    # Check if VM is not running
+    local lease_vfp lease_machine_name lease_vbox_uuid
+    lease_vfp=$(lease_get "$lease_id" "vagrantfile_path")
+    lease_machine_name=$(echo "$machines" | jq -r --arg id "$lease_id" '.[$id].name // "default"')
+    lease_vbox_uuid=$(resolve_vbox_uuid "$lease_vfp" "$lease_machine_name")
+    if [ -z "$lease_vbox_uuid" ] || ! echo "$running_vms" | grep -qF "$lease_vbox_uuid" 2>/dev/null; then
+      log "Removing expired lease for $lease_id (poweroff VM with expired standard lease)"
+      lease_remove "$lease_id"
+    fi
+  done
+
   update_tmux_cache "$running_count" "$warning_count"
   epoch_now > "${VMW_STATE_DIR}/last-sweep"
 }
