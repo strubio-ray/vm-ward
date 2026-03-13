@@ -601,7 +601,9 @@ cmd_status() {
       "VM NAME" "PROJECT" "STATE" "LEASE" "TIME LEFT" "LAST ACTIVE"
     printf "%s\n" "$(printf '─%.0s' {1..98})"
 
-    for line in "${active_lines[@]}"; do echo "$line"; done
+    if [ "${#active_lines[@]}" -gt 0 ]; then
+      for line in "${active_lines[@]}"; do echo "$line"; done
+    fi
 
     if [ "${#halted_lines[@]}" -gt 0 ]; then
       printf "\n\033[2;3m%-20s\033[0m\n" "RECENTLY HALTED / EXPIRED"
