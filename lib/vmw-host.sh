@@ -182,6 +182,17 @@ lease_remove() {
   jq --arg id "$machine_id" 'del(.[$id])' "$LEASES_FILE" > "$tmp" && mv "$tmp" "$LEASES_FILE"
 }
 
+lease_set_halted() {
+  local machine_id="$1"
+  local now
+  now=$(epoch_now)
+  local tmp
+  tmp=$(mktemp "${LEASES_FILE}.XXXXXX")
+  jq --arg id "$machine_id" --argjson now "$now" \
+    '.[$id].mode = "halted" | .[$id].expires_at = null | .[$id].halted_at = $now' \
+    "$LEASES_FILE" > "$tmp" && mv "$tmp" "$LEASES_FILE"
+}
+
 create_lease() {
   local machine_id="$1"
   local vagrantfile_path="$2"
@@ -358,12 +369,16 @@ cmd_status() {
         state="poweroff"
       fi
 
-      local lease="none" remaining="n/a"
+      local lease="none" remaining="n/a" halted_at_val=""
       if lease_exists "$machine_id"; then
         local mode expires_at
         mode=$(lease_get "$machine_id" "mode")
         expires_at=$(lease_get "$machine_id" "expires_at")
-        if [ "$mode" = "exempt" ] || [ "$mode" = "indefinite" ]; then
+        if [ "$mode" = "halted" ]; then
+          lease="halted"
+          remaining="n/a"
+          halted_at_val=$(lease_get "$machine_id" "halted_at")
+        elif [ "$mode" = "exempt" ] || [ "$mode" = "indefinite" ]; then
           lease="$mode"
           remaining="$mode"
         elif [ -n "$expires_at" ] && [ "$expires_at" != "null" ]; then
@@ -386,7 +401,8 @@ cmd_status() {
         --arg lease "$lease" \
         --arg remaining "$remaining" \
         --arg last_active "$last_active_ts" \
-        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, last_active: (if $last_active == "" then null else ($last_active | tonumber) end), managed: true}]')
+        --arg halted_at "$halted_at_val" \
+        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, last_active: (if $last_active == "" then null else ($last_active | tonumber) end), halted_at: (if $halted_at == "" then null else ($halted_at | tonumber) end), managed: true}]')
     done
 
     # Add unmanaged VBox VMs
@@ -452,7 +468,11 @@ cmd_status() {
       local mode expires_at
       mode=$(lease_get "$machine_id" "mode")
       expires_at=$(lease_get "$machine_id" "expires_at")
-      if [ "$mode" = "exempt" ] || [ "$mode" = "indefinite" ]; then
+      if [ "$mode" = "halted" ]; then
+        lease="halted"
+        remaining="n/a"
+        color="\033[90m"  # gray
+      elif [ "$mode" = "exempt" ] || [ "$mode" = "indefinite" ]; then
         lease="$mode"
         remaining="$mode"
         color="\033[36m"  # cyan
@@ -499,7 +519,11 @@ cmd_status() {
     local last_active_display="n/a"
     if lease_exists "$machine_id"; then
       local last_active_ts
-      last_active_ts=$(lease_get "$machine_id" "last_active")
+      if [ "$mode" = "halted" ]; then
+        last_active_ts=$(lease_get "$machine_id" "halted_at")
+      else
+        last_active_ts=$(lease_get "$machine_id" "last_active")
+      fi
       last_active_display=$(format_ago "$last_active_ts")
     fi
 
@@ -683,7 +707,7 @@ cmd_sweep() {
       VAGRANT_CWD="$vfp" vagrant halt 2>/dev/null || {
         log "Warning: vagrant halt failed for $vm_name"
       }
-      lease_remove "$machine_id"
+      lease_set_halted "$machine_id"
       continue
     fi
 
@@ -804,7 +828,7 @@ cmd_halt() {
 
   echo "Halting $vm_name..."
   VAGRANT_CWD="$vfp" vagrant halt 2>&1 || die "Failed to halt $vm_name"
-  lease_remove "$machine_id"
+  lease_set_halted "$machine_id"
   echo "Halted $vm_name and removed lease."
 }
 
