@@ -406,6 +406,13 @@ cmd_status() {
         fi
       fi
 
+      if [ "$lease" = "none" ] && [ "$state" = "running" ]; then
+        local daemon_st; daemon_st=$(daemon_status)
+        case "$daemon_st" in
+          running\ *|loaded) lease="pending"; remaining="next sweep" ;;
+        esac
+      fi
+
       local last_active_ts=""
       if lease_exists "$machine_id"; then
         last_active_ts=$(lease_get "$machine_id" "last_active")
@@ -534,6 +541,13 @@ cmd_status() {
           fi
         fi
       fi
+    fi
+
+    if [ "$lease" = "none" ] && [ "$state" = "running" ]; then
+      local daemon_st; daemon_st=$(daemon_status)
+      case "$daemon_st" in
+        running\ *|loaded) lease="pending"; remaining="next sweep"; color="\033[33m" ;;
+      esac
     fi
 
     if [ "$state" = "poweroff" ]; then
