@@ -19,16 +19,17 @@ const (
 	colTimeLeft = 16
 	colActivity = 10
 	colLastAct  = 14
+	colTemplate = 10
 )
 
 func tableWidth() int {
-	return colName + colProject + colState + colLease + colTimeLeft + colActivity + colLastAct + 6 // 6 for spacing
+	return colName + colProject + colState + colLease + colTimeLeft + colActivity + colLastAct + colTemplate + 7 // 7 for spacing
 }
 
 // RenderHeader returns the bold header row.
 func RenderHeader() string {
 	return HeaderStyle.Render(fmt.Sprintf(
-		"%-*s %-*s %-*s %-*s %-*s %-*s %-*s",
+		"%-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s",
 		colName, "VM NAME",
 		colProject, "PROJECT",
 		colState, "STATE",
@@ -36,6 +37,7 @@ func RenderHeader() string {
 		colTimeLeft, "TIME LEFT",
 		colActivity, "ACTIVITY",
 		colLastAct, "LAST ACTIVE",
+		colTemplate, "TEMPLATE",
 	))
 }
 
@@ -57,9 +59,14 @@ func RenderRow(vm vmw.VM, now time.Time, selected bool) string {
 	timeLeft := truncate(TimeLeft(vm, now), colTimeLeft)
 	activity := truncate(formatActivity(vm.LastActivity), colActivity)
 	lastActive := truncate(FormatAgo(lastActiveTime(vm), now), colLastAct)
+	tplVer := "—"
+	if vm.TemplateVersion != nil {
+		tplVer = *vm.TemplateVersion
+	}
+	template := truncate(tplVer, colTemplate)
 
 	line := fmt.Sprintf(
-		"%-*s %-*s %-*s %-*s %-*s %-*s %-*s",
+		"%-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s",
 		colName, name,
 		colProject, project,
 		colState, state,
@@ -67,6 +74,7 @@ func RenderRow(vm vmw.VM, now time.Time, selected bool) string {
 		colTimeLeft, timeLeft,
 		colActivity, activity,
 		colLastAct, lastActive,
+		colTemplate, template,
 	)
 
 	style := rowStyle(vm, now)

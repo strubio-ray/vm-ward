@@ -235,6 +235,20 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, doSweep(m.client)
 		}
 		return m, nil
+
+	case matchKey(msg, "u"):
+		if vm := m.selectedVM(); vm != nil && vm.TemplateVersion != nil {
+			m.state = StateConfirm
+			m.confirmAction = "update template for"
+			m.confirmVM = vm
+		}
+		return m, nil
+
+	case matchKey(msg, "shift+u"):
+		m.state = StateConfirm
+		m.confirmAction = "update all templates for"
+		m.confirmVM = &vmw.VM{Name: "all VMs", Managed: true}
+		return m, nil
 	}
 
 	return m, nil
@@ -520,6 +534,10 @@ func doAction(client vmw.VMClient, action string, vm *vmw.VM) tea.Cmd {
 			err = client.Exempt(vm.ID)
 		case "set indefinite":
 			err = client.Extend(vm.ID, "indefinite")
+		case "update template for":
+			err = client.Update(vm.ID)
+		case "update all templates for":
+			err = client.UpdateAll()
 		}
 		return actionMsg{action, vm.Name, err}
 	}
@@ -566,6 +584,10 @@ func capitalizeAction(s string) string {
 		return "Exempted"
 	case "set indefinite":
 		return "Set indefinite on"
+	case "update template for":
+		return "Updated template for"
+	case "update all templates for":
+		return "Updated all templates for"
 	default:
 		return s
 	}

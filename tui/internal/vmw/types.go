@@ -33,6 +33,7 @@ type VM struct {
 	LastActive   *int64  `json:"last_active"`
 	HaltedAt     *int64  `json:"halted_at"`
 	LastActivity *string `json:"last_activity"`
-	Managed      bool    `json:"managed"`
-	Section      string  `json:"section"`
+	Managed         bool    `json:"managed"`
+	Section         string  `json:"section"`
+	TemplateVersion *string `json:"template_version"`
 }

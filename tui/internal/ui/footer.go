@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const keyLegend = "q quit  ↑↓ select  e extend  h halt  d destroy  x exempt  i indef  s sweep  r refresh"
+const keyLegend = "q quit  ↑↓ select  e extend  h halt  d destroy  x exempt  i indef  u update  U update-all  s sweep  r refresh"
 
 // RenderFooter renders the three-section footer: key legend, sweep countdown, refresh age.
 func RenderFooter(width int, lastSweep *int64, lastRefresh, now time.Time) string {

@@ -15,6 +15,8 @@ type VMClient interface {
 	Destroy(identifier string) error
 	Exempt(identifier string) error
 	Sweep() error
+	Update(identifier string) error
+	UpdateAll() error
 }
 
 // ExecClient implements VMClient by shelling out to the vmw binary.
@@ -65,5 +67,15 @@ func (c *ExecClient) Exempt(identifier string) error {
 
 func (c *ExecClient) Sweep() error {
 	_, err := c.run("sweep")
+	return err
+}
+
+func (c *ExecClient) Update(identifier string) error {
+	_, err := c.run("update", identifier)
+	return err
+}
+
+func (c *ExecClient) UpdateAll() error {
+	_, err := c.run("update", "--all")
 	return err
 }

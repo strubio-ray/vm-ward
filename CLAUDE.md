@@ -9,6 +9,7 @@ bin/vmw              # Entry point — resolves symlinks, detects platform, disp
 lib/vmw-common.sh    # Shared utilities (logging, JSON helpers, duration parsing)
 lib/vmw-host.sh      # macOS host daemon (Vagrant/VBox integration, leases, sweep)
 lib/vmw-update.sh    # Copier template update module (lazy-sourced by `vmw update`)
+tui/                 # Interactive TUI dashboard (Go/bubbletea, built to bin/vmw-tui)
 share/vm-ward/       # launchd plist template
 ```
 
@@ -19,8 +20,9 @@ share/vm-ward/       # launchd plist template
 - **Sweep** runs every 5 min via launchd — warns at T1 (50%) and T2 (87.5%), halts on expiry. Activity detection uses `VBoxManage metrics query` (host-side CPU%). First sweep after VM start returns "idle" (metrics need one sampling period to populate). Writes epoch to `last-sweep` after each run. Cleans up halted leases >24h old and expired standard leases for poweroff VMs.
 - **Event log**: `~/.local/state/vm-ward/events.jsonl` — structured JSONL log of lease/halt events, auto-trimmed to 500 lines.
 - **Version placeholder**: `bin/vmw` contains `VMW_VERSION="%%VERSION%%"` — injected by Homebrew formula at install time.
+- **Interactive dashboard**: `vmw` or `vmw status` launches the TUI dashboard (Go/bubbletea). `vmw status --json` returns machine-readable JSON for scripting. The TUI supports keybindings for extend, halt, destroy, exempt, update template (`u`), and update all templates (`U`).
 - **Status JSON schema**: `vmw status --json` returns `{daemon, last_sweep, recent_events, vms}` wrapper object (not a bare array). Each VM includes `section` (`active`|`halted`), `duration`, `halted_at`, and `template_version` fields.
-- **Template tracking**: `vmw update` runs `copier update` across projects created from copier templates. Template version (from `.vm/.copier-answers.yml`) is shown in the TEMPLATE column of `vmw status`.
+- **Template tracking**: `vmw update` runs `copier update` across projects created from copier templates. Template version (from `.vm/.copier-answers.yml`) is shown in the TEMPLATE column of the dashboard.
 
 ## Release Flow
 
@@ -40,8 +42,8 @@ Optional: `copier` (for `vmw update`)
 
 ```bash
 bash -n lib/vmw-host.sh          # Syntax check
-vmw status                       # Show all VMs and lease status
-vmw status --json                # JSON output
+vmw                              # Launch interactive dashboard
+vmw status --json                # JSON output for scripting
 VBoxManage list runningvms       # Cross-check running VMs
 vmw update .                     # Update current project's copier template
 vmw update --all                 # Update all copier-managed projects
