@@ -142,6 +142,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch m.state {
 	case StateConfirm:
 		return m.handleConfirmKey(msg)
+	case StateConfirmProvision:
+		return m.handleProvisionKey(msg)
 	case StatePicker:
 		return m.handlePickerKey(msg)
 	default:
@@ -260,11 +262,40 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case matchKey(msg, "y"):
 		vm := m.confirmVM
 		action := m.confirmAction
+		// For update actions, ask about provisioning before dispatching
+		if action == "update template for" || action == "update all templates for" {
+			m.state = StateConfirmProvision
+			return m, nil
+		}
 		m.state = StateNormal
 		m.confirmVM = nil
 		return m, doAction(m.client, action, vm)
 
 	case matchKey(msg, "n", "escape"):
+		m.state = StateNormal
+		m.confirmVM = nil
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m Model) handleProvisionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case matchKey(msg, "y"):
+		vm := m.confirmVM
+		action := m.confirmAction + " --provision"
+		m.state = StateNormal
+		m.confirmVM = nil
+		return m, doAction(m.client, action, vm)
+
+	case matchKey(msg, "n"):
+		vm := m.confirmVM
+		action := m.confirmAction
+		m.state = StateNormal
+		m.confirmVM = nil
+		return m, doAction(m.client, action, vm)
+
+	case matchKey(msg, "escape"):
 		m.state = StateNormal
 		m.confirmVM = nil
 		return m, nil
@@ -415,6 +446,10 @@ func (m Model) View() tea.View {
 		b.WriteString("\n")
 		b.WriteString(ui.RenderConfirm(m.confirmAction, m.confirmVM.Name))
 		b.WriteString("\n")
+	case StateConfirmProvision:
+		b.WriteString("\n")
+		b.WriteString(ui.RenderProvisionConfirm())
+		b.WriteString("\n")
 	case StatePicker:
 		b.WriteString("\n")
 		b.WriteString(ui.RenderPicker(m.pickerCursor, m.confirmVM.Name))
@@ -536,9 +571,13 @@ func doAction(client vmw.VMClient, action string, vm *vmw.VM) tea.Cmd {
 		case "set indefinite":
 			err = client.Extend(vm.ID, "indefinite")
 		case "update template for":
-			err = client.Update(vm.ID)
+			err = client.Update(vm.ID, false)
+		case "update template for --provision":
+			err = client.Update(vm.ID, true)
 		case "update all templates for":
-			err = client.UpdateAll()
+			err = client.UpdateAll(false)
+		case "update all templates for --provision":
+			err = client.UpdateAll(true)
 		}
 		return actionMsg{action, vm.Name, err}
 	}
@@ -589,9 +628,9 @@ func capitalizeAction(s string) string {
 		return "Exempted"
 	case "set indefinite":
 		return "Set indefinite on"
-	case "update template for":
+	case "update template for", "update template for --provision":
 		return "Updated template for"
-	case "update all templates for":
+	case "update all templates for", "update all templates for --provision":
 		return "Updated all templates for"
 	default:
 		return s

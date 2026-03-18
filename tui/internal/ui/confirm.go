@@ -8,6 +8,11 @@ func RenderConfirm(action, vmName string) string {
 	return ConfirmStyle.Render("  " + prompt)
 }
 
+// RenderProvisionConfirm renders the post-update provisioning prompt.
+func RenderProvisionConfirm() string {
+	return ConfirmStyle.Render("  Reprovision VMs after update? [y/n/esc to cancel]")
+}
+
 func capitalize(s string) string {
 	if s == "" {
 		return s
