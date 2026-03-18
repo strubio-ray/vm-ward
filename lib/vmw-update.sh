@@ -41,7 +41,7 @@ update_single_project() {
 
   log "Updating template for $vm_name ($vfp)..."
   local update_output
-  if update_output=$(cd "$vfp" && copier update --defaults --trust 2>&1); then
+  if update_output=$(cd "$vfp" && copier update --defaults --trust .vm 2>&1); then
     local new_commit
     new_commit=$(grep '^_commit:' "$answers_file" 2>/dev/null | awk '{print $2}')
     event_log "template_updated" "$vm_name" "$machine_id" "${old_commit:-unknown} -> ${new_commit:-unknown}"
