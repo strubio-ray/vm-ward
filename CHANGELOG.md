@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.4.1](https://github.com/strubio-ray/vm-ward/compare/81d7b06b4997b66e59968392998dbc7c2a75c2d6..v1.4.1) - 2026-03-18
+#### Bug Fixes
+- (**tui**) show multi-line error toasts with longer display time - ([81d7b06](https://github.com/strubio-ray/vm-ward/commit/81d7b06b4997b66e59968392998dbc7c2a75c2d6)) - Steven
+- pass .vm destination to copier update - ([14f59cb](https://github.com/strubio-ray/vm-ward/commit/14f59cbf4fad1775d5c45fe38dedcb0a2fa4896f)) - Steven
+
+- - -
+
 ## [v1.4.0](https://github.com/strubio-ray/vm-ward/compare/763db7ce63238d9e3f74cf79dc5b98cf10b683e1..v1.4.0) - 2026-03-18
 #### Features
 - consolidate to interactive TUI dashboard - ([763db7c](https://github.com/strubio-ray/vm-ward/commit/763db7ce63238d9e3f74cf79dc5b98cf10b683e1)) - Steven
