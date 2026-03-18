@@ -101,6 +101,13 @@ read_machine_index() {
   echo "$machines"
 }
 
+# Get copier template version for a project path
+get_template_version() {
+  local vfp="$1"
+  local answers="${vfp}/.vm/.copier-answers.yml"
+  [ -f "$answers" ] && grep '^_commit:' "$answers" | awk '{print $2}'
+}
+
 # Get list of running VMs from VBoxManage
 get_running_vms() {
   if ! command -v VBoxManage >/dev/null 2>&1; then
@@ -460,6 +467,9 @@ cmd_status() {
         section="halted"
       fi
 
+      local tpl_version
+      tpl_version=$(get_template_version "$vfp")
+
       result=$(echo "$result" | jq \
         --arg id "$machine_id" \
         --arg name "$vm_name" \
@@ -473,7 +483,8 @@ cmd_status() {
         --arg section "$section" \
         --arg expires_at_val "$expires_at_val" \
         --arg last_activity "$last_activity_val" \
-        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, duration: (if $duration == "" then null else $duration end), last_active: (if $last_active == "" then null else ($last_active | tonumber) end), halted_at: (if $halted_at == "" then null else ($halted_at | tonumber) end), managed: true, section: $section, expires_at: (if $expires_at_val == "" or $expires_at_val == "null" then null else ($expires_at_val | tonumber) end), last_activity: (if $last_activity == "" then null else $last_activity end)}]')
+        --arg tpl_version "$tpl_version" \
+        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, duration: (if $duration == "" then null else $duration end), last_active: (if $last_active == "" then null else ($last_active | tonumber) end), halted_at: (if $halted_at == "" then null else ($halted_at | tonumber) end), managed: true, section: $section, expires_at: (if $expires_at_val == "" or $expires_at_val == "null" then null else ($expires_at_val | tonumber) end), last_activity: (if $last_activity == "" then null else $last_activity end), template_version: (if $tpl_version == "" then null else $tpl_version end)}]')
     done
 
     # Add unmanaged VBox VMs
@@ -611,9 +622,13 @@ cmd_status() {
       last_active_display=$(format_ago "$last_active_ts")
     fi
 
+    local tpl_version
+    tpl_version=$(get_template_version "$vfp")
+    [ -z "$tpl_version" ] && tpl_version="—"
+
     local formatted_line
-    formatted_line=$(printf "${color}%-20s %-30s %-10s %-12s %-12s %-14s\033[0m" \
-      "$vm_name" "$project" "$state" "$lease" "$remaining" "$last_active_display")
+    formatted_line=$(printf "${color}%-20s %-30s %-10s %-12s %-12s %-14s %-10s\033[0m" \
+      "$vm_name" "$project" "$state" "$lease" "$remaining" "$last_active_display" "$tpl_version")
 
     local section="active"
     if [ "$lease" = "halted" ] || { [ "$state" = "poweroff" ] && { [ "$lease" = "expired" ] || [ "$lease" = "none" ]; }; }; then
@@ -630,9 +645,9 @@ cmd_status() {
   if [ "$has_vms" = false ]; then
     echo "No VMs found in Vagrant machine index."
   else
-    printf "\033[1m%-20s %-30s %-10s %-12s %-12s %-14s\033[0m\n" \
-      "VM NAME" "PROJECT" "STATE" "LEASE" "TIME LEFT" "LAST ACTIVE"
-    printf "%s\n" "$(printf '─%.0s' {1..98})"
+    printf "\033[1m%-20s %-30s %-10s %-12s %-12s %-14s %-10s\033[0m\n" \
+      "VM NAME" "PROJECT" "STATE" "LEASE" "TIME LEFT" "LAST ACTIVE" "TEMPLATE"
+    printf "%s\n" "$(printf '─%.0s' {1..108})"
 
     if [ "${#active_lines[@]}" -gt 0 ]; then
       for line in "${active_lines[@]}"; do echo "$line"; done
@@ -640,7 +655,7 @@ cmd_status() {
 
     if [ "${#halted_lines[@]}" -gt 0 ]; then
       printf "\n\033[2;3m%-20s\033[0m\n" "RECENTLY HALTED / EXPIRED"
-      printf "\033[2m%s\033[0m\n" "$(printf '─%.0s' {1..98})"
+      printf "\033[2m%s\033[0m\n" "$(printf '─%.0s' {1..108})"
       for line in "${halted_lines[@]}"; do echo "$line"; done
     fi
   fi
@@ -1161,6 +1176,7 @@ Commands:
   halt <name|.>              Immediately halt a VM and remove lease
   destroy <name|.>           Destroy a VM, delete its disk, and remove lease
   exempt <name|.>            Exempt a VM from auto-halt
+  update [.|name|--all] [--provision]  Update copier templates
   sweep [--no-activity]      Run enforcement loop (called by launchd)
   install                    Install launchd daemon
   uninstall                  Remove launchd daemon
@@ -1180,6 +1196,8 @@ Examples:
   vmw extend . 8h         Extend current project's VM by 8 hours
   vmw extend . overnight  Extend until tomorrow morning
   vmw halt .              Halt current project's VM now
+  vmw update .            Update current project's copier template
+  vmw update --all        Update all copier-managed projects
 
 Activity detection:
   Sweep checks running VMs for CPU activity via VBoxManage metrics
@@ -1206,6 +1224,10 @@ main() {
         die "TUI binary not found. Install via 'brew upgrade vm-ward' or build with 'cd tui && go build -o ../bin/vmw-tui'"
       fi
       VMW_PATH="${VMW_ROOT}/bin/vmw" exec "$tui_bin" "$@"
+      ;;
+    update)
+      source "${VMW_ROOT}/lib/vmw-update.sh"
+      cmd_update "$@"
       ;;
     tmux-status) cmd_tmux_status "$@" ;;
     version)     vmw_version ;;
