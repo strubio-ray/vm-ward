@@ -14,6 +14,7 @@ import (
 
 const refreshInterval = 30 * time.Second
 const toastTTL = 3 * time.Second
+const errorToastTTL = 10 * time.Second
 
 // Messages
 type tickMsg time.Time
@@ -110,8 +111,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case actionMsg:
 		if msg.err != nil {
-			summary := errorSummary(msg.err, m.width-6) // 6 for "  " prefix + margin
-			m.toast = ui.NewToast(fmt.Sprintf("Error: %s %s — %s", msg.action, msg.vmName, summary), true, toastTTL)
+			detail := errorDetail(msg.err, m.width-6, 8)
+			m.toast = ui.NewToast(fmt.Sprintf("Error: %s %s\n%s", msg.action, msg.vmName, detail), true, errorToastTTL)
 		} else {
 			m.toast = ui.NewToast(fmt.Sprintf("%s %s", capitalizeAction(msg.action), msg.vmName), false, toastTTL)
 		}
@@ -122,8 +123,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sweepMsg:
 		m.sweeping = false
 		if msg.err != nil {
-			summary := errorSummary(msg.err, m.width-6)
-			m.toast = ui.NewToast(fmt.Sprintf("Sweep failed: %s", summary), true, toastTTL)
+			detail := errorDetail(msg.err, m.width-6, 8)
+			m.toast = ui.NewToast(fmt.Sprintf("Sweep failed\n%s", detail), true, errorToastTTL)
 		} else {
 			m.toast = ui.NewToast("Sweep complete", false, toastTTL)
 		}
@@ -557,21 +558,25 @@ func doSweep(client vmw.VMClient) tea.Cmd {
 	}
 }
 
-// errorSummary extracts a single-line summary from a potentially multi-line
-// error, truncated to maxLen with "..." if needed.
-func errorSummary(err error, maxLen int) string {
-	msg := err.Error()
-	// Take only the first non-empty line
-	for _, line := range strings.Split(msg, "\n") {
+// errorDetail formats a multi-line error for toast display.
+// Each line is trimmed and truncated to maxWidth. Empty lines are skipped.
+// At most maxLines lines are kept.
+func errorDetail(err error, maxWidth, maxLines int) string {
+	var lines []string
+	for _, line := range strings.Split(err.Error(), "\n") {
 		line = strings.TrimSpace(line)
-		if line != "" {
-			if maxLen > 3 && len(line) > maxLen {
-				return line[:maxLen-3] + "..."
-			}
-			return line
+		if line == "" {
+			continue
+		}
+		if maxWidth > 3 && len(line) > maxWidth {
+			line = line[:maxWidth-3] + "..."
+		}
+		lines = append(lines, line)
+		if len(lines) >= maxLines {
+			break
 		}
 	}
-	return msg
+	return strings.Join(lines, "\n")
 }
 
 func capitalizeAction(s string) string {
