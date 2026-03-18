@@ -54,6 +54,10 @@ type Model struct {
 	toast    *ui.Toast
 	sweeping bool
 
+	pendingAction string
+	pendingVMName string
+	pendingVMID   string
+
 	width  int
 	height int
 }
@@ -110,6 +114,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case actionMsg:
+		m.pendingAction = ""
+		m.pendingVMName = ""
+		m.pendingVMID = ""
 		if msg.err != nil {
 			detail := errorDetail(msg.err, m.width-6, 8)
 			m.toast = ui.NewToast(fmt.Sprintf("Error: %s %s\n%s", msg.action, msg.vmName, detail), true, errorToastTTL)
@@ -193,7 +200,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case matchKey(msg, "h"):
-		if vm := m.selectedVM(); vm != nil && vm.State == "running" {
+		if vm := m.selectedVM(); vm != nil && vm.State == "running" && !m.hasPendingAction(vm.ID) {
 			m.state = StateConfirm
 			m.confirmAction = "halt"
 			m.confirmVM = vm
@@ -201,7 +208,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case matchKey(msg, "d"):
-		if vm := m.selectedVM(); vm != nil {
+		if vm := m.selectedVM(); vm != nil && !m.hasPendingAction(vm.ID) {
 			m.state = StateConfirm
 			m.confirmAction = "destroy"
 			m.confirmVM = vm
@@ -209,7 +216,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case matchKey(msg, "x"):
-		if vm := m.selectedVM(); vm != nil {
+		if vm := m.selectedVM(); vm != nil && !m.hasPendingAction(vm.ID) {
 			m.state = StateConfirm
 			m.confirmAction = "exempt"
 			m.confirmVM = vm
@@ -217,7 +224,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case matchKey(msg, "i"):
-		if vm := m.selectedVM(); vm != nil {
+		if vm := m.selectedVM(); vm != nil && !m.hasPendingAction(vm.ID) {
 			m.state = StateConfirm
 			m.confirmAction = "set indefinite"
 			m.confirmVM = vm
@@ -225,7 +232,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case matchKey(msg, "e"):
-		if vm := m.selectedVM(); vm != nil {
+		if vm := m.selectedVM(); vm != nil && !m.hasPendingAction(vm.ID) {
 			m.state = StatePicker
 			m.confirmVM = vm
 			m.pickerCursor = ui.DefaultPresetIndex
@@ -240,7 +247,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case matchKey(msg, "u"):
-		if vm := m.selectedVM(); vm != nil && vm.TemplateVersion != nil {
+		if vm := m.selectedVM(); vm != nil && vm.TemplateVersion != nil && !m.hasPendingAction(vm.ID) {
 			m.state = StateConfirm
 			m.confirmAction = "update template for"
 			m.confirmVM = vm
@@ -248,9 +255,11 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case matchKey(msg, "shift+u"):
-		m.state = StateConfirm
-		m.confirmAction = "update all templates for"
-		m.confirmVM = &vmw.VM{Name: "all VMs", Managed: true}
+		if m.pendingAction == "" {
+			m.state = StateConfirm
+			m.confirmAction = "update all templates for"
+			m.confirmVM = &vmw.VM{Name: "all VMs", Managed: true}
+		}
 		return m, nil
 	}
 
@@ -267,6 +276,9 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.state = StateConfirmProvision
 			return m, nil
 		}
+		m.pendingAction = action
+		m.pendingVMName = vm.Name
+		m.pendingVMID = vm.ID
 		m.state = StateNormal
 		m.confirmVM = nil
 		return m, doAction(m.client, action, vm)
@@ -284,6 +296,9 @@ func (m Model) handleProvisionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case matchKey(msg, "y"):
 		vm := m.confirmVM
 		action := m.confirmAction + " --provision"
+		m.pendingAction = action
+		m.pendingVMName = vm.Name
+		m.pendingVMID = vm.ID
 		m.state = StateNormal
 		m.confirmVM = nil
 		return m, doAction(m.client, action, vm)
@@ -291,6 +306,9 @@ func (m Model) handleProvisionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case matchKey(msg, "n"):
 		vm := m.confirmVM
 		action := m.confirmAction
+		m.pendingAction = action
+		m.pendingVMName = vm.Name
+		m.pendingVMID = vm.ID
 		m.state = StateNormal
 		m.confirmVM = nil
 		return m, doAction(m.client, action, vm)
@@ -320,6 +338,9 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case matchKey(msg, "enter"):
 		vm := m.confirmVM
 		duration := ui.DurationPresets[m.pickerCursor]
+		m.pendingAction = "extend"
+		m.pendingVMName = vm.Name
+		m.pendingVMID = vm.ID
 		m.state = StateNormal
 		m.confirmVM = nil
 		return m, doExtend(m.client, vm, duration)
@@ -357,6 +378,13 @@ func (m Model) View() tea.View {
 	// Sweeping indicator
 	if m.sweeping {
 		b.WriteString(ui.Yellow.Render("  Sweeping..."))
+		b.WriteString("\n")
+	}
+
+	// Action in-progress indicator
+	if m.pendingAction != "" {
+		label := fmt.Sprintf("  %s %s...", progressLabel(m.pendingAction), m.pendingVMName)
+		b.WriteString(ui.Yellow.Render(label))
 		b.WriteString("\n")
 	}
 
@@ -473,6 +501,10 @@ func (m Model) View() tea.View {
 }
 
 // Helpers
+
+func (m *Model) hasPendingAction(vmID string) bool {
+	return m.pendingVMID != "" && m.pendingVMID == vmID
+}
 
 func (m *Model) selectedVM() *vmw.VM {
 	if m.cursor >= 0 && m.cursor < len(m.vms) && m.vms[m.cursor].Managed {
@@ -616,6 +648,27 @@ func errorDetail(err error, maxWidth, maxLines int) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func progressLabel(s string) string {
+	switch s {
+	case "halt":
+		return "Halting"
+	case "destroy":
+		return "Destroying"
+	case "exempt":
+		return "Exempting"
+	case "set indefinite":
+		return "Setting indefinite on"
+	case "extend":
+		return "Extending"
+	case "update template for", "update template for --provision":
+		return "Updating template for"
+	case "update all templates for", "update all templates for --provision":
+		return "Updating all templates for"
+	default:
+		return s
+	}
 }
 
 func capitalizeAction(s string) string {
