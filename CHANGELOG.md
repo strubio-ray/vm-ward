@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.3.0](https://github.com/strubio-ray/vm-ward/compare/0482ebe1840d405352749ae4d5f808afa694973e..v1.3.0) - 2026-03-18
+#### Features
+- add copier template update subcommand - ([0482ebe](https://github.com/strubio-ray/vm-ward/commit/0482ebe1840d405352749ae4d5f808afa694973e)) - Steven
+
+- - -
+
 ## [v1.2.0](https://github.com/strubio-ray/vm-ward/compare/6ac2ca4887a2792976f60ce89ba7b324569b7a8d..v1.2.0) - 2026-03-13
 #### Features
 - add interactive TUI dashboard and destroy command - ([997ae73](https://github.com/strubio-ray/vm-ward/commit/997ae73fb14da02f0a5767aa91358a29eb1f51c3)) - Steven
