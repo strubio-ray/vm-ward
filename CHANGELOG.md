@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.5.2](https://github.com/strubio-ray/vm-ward/compare/b9464dda87b1215d69534a1bb1c6ef18abfbde96..v1.5.2) - 2026-03-19
+#### Bug Fixes
+- (**tui**) use correct escape key name for bubbletea v2 - ([b9464dd](https://github.com/strubio-ray/vm-ward/commit/b9464dda87b1215d69534a1bb1c6ef18abfbde96)) - Steven
+
+- - -
+
 ## [v1.5.1](https://github.com/strubio-ray/vm-ward/compare/6f5166549760c563beb16b1e51a873ee92a04797..v1.5.1) - 2026-03-19
 #### Bug Fixes
 - (**peek**) replace GNU timeout with portable perl alarm for macOS - ([6f51665](https://github.com/strubio-ray/vm-ward/commit/6f5166549760c563beb16b1e51a873ee92a04797)) - Steven
