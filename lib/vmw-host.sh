@@ -964,7 +964,7 @@ cmd_peek() {
     fi
     echo \"===PROCESSES===\"
     ps aux --sort=-%cpu | head -20
-  ' 2>/dev/null") || {
+  ' -- -o StrictHostKeyChecking=accept-new -o BatchMode=yes -o LogLevel=ERROR 2>/dev/null") || {
     die "Failed to connect to VM '$vm_name' (timeout or SSH error)"
   }
 

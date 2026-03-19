@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"syscall"
+	"time"
 )
 
 // VMClient defines operations the TUI can perform against the vmw CLI.
@@ -88,6 +89,7 @@ func (c *ExecClient) runCtx(ctx context.Context, args ...string) ([]byte, error)
 	cmd.Cancel = func() error {
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 	}
+	cmd.WaitDelay = 5 * time.Second
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("%s %v: %w\n%s", c.VmwPath, args, err, out)
