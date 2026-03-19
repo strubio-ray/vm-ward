@@ -4,29 +4,39 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"charm.land/lipgloss/v2"
 )
 
-const keyLegend = "q quit  ↑↓ select  e extend  h halt  d destroy  x exempt  i indef  u update  U update-all  p peek  s sweep  r refresh"
+// RenderFooter renders the footer with help view on the left and status on the right.
+// Status sections are progressively dropped as the terminal narrows.
+func RenderFooter(width int, helpView string, lastSweep *int64, lastRefresh, now time.Time) string {
+	left := helpView
+	sweep := sweepCountdown(lastSweep, now)
+	refresh := refreshAge(lastRefresh, now)
 
-// RenderFooter renders the three-section footer: key legend, sweep countdown, refresh age.
-func RenderFooter(width int, lastSweep *int64, lastRefresh, now time.Time) string {
-	left := FooterDim.Render(keyLegend)
-	center := sweepCountdown(lastSweep, now)
-	right := refreshAge(lastRefresh, now)
+	leftW := lipgloss.Width(left)
+	sweepW := lipgloss.Width(sweep)
+	refreshW := lipgloss.Width(refresh)
 
-	leftW := lipglossWidth(left)
-	centerW := lipglossWidth(center)
-	rightW := lipglossWidth(right)
+	const minGap = 2
 
-	gap := width - leftW - centerW - rightW
-	if gap < 2 {
-		// Narrow terminal: just show key legend
-		return left
+	// Wide: help + sweep + refresh
+	if leftW+sweepW+refreshW+minGap*2 <= width {
+		gap := width - leftW - sweepW - refreshW
+		leftGap := gap / 2
+		rightGap := gap - leftGap
+		return left + strings.Repeat(" ", leftGap) + sweep + strings.Repeat(" ", rightGap) + refresh
 	}
-	leftGap := gap / 2
-	rightGap := gap - leftGap
 
-	return left + strings.Repeat(" ", leftGap) + center + strings.Repeat(" ", rightGap) + right
+	// Medium: help + refresh (drop sweep)
+	if leftW+refreshW+minGap <= width {
+		gap := width - leftW - refreshW
+		return left + strings.Repeat(" ", gap) + refresh
+	}
+
+	// Narrow: help only
+	return left
 }
 
 func sweepCountdown(lastSweep *int64, now time.Time) string {
@@ -50,25 +60,4 @@ func refreshAge(lastRefresh, now time.Time) string {
 		style = Yellow
 	}
 	return style.Render(fmt.Sprintf("Refreshed %ds ago", secs))
-}
-
-// lipglossWidth counts visible characters (approximation — strips ANSI).
-func lipglossWidth(s string) int {
-	// Simple ANSI strip for width calculation
-	inEsc := false
-	w := 0
-	for _, c := range s {
-		if c == '\033' {
-			inEsc = true
-			continue
-		}
-		if inEsc {
-			if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') {
-				inEsc = false
-			}
-			continue
-		}
-		w++
-	}
-	return w
 }

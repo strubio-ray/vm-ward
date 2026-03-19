@@ -9,6 +9,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
 	"charm.land/lipgloss/v2"
 	"github.com/strubio-ray/vm-ward/tui/internal/ui"
 	"github.com/strubio-ray/vm-ward/tui/internal/vmw"
@@ -75,6 +77,9 @@ type Model struct {
 	peekCancel    context.CancelFunc
 	peekStartTime time.Time
 
+	keys keyMap
+	help help.Model
+
 	width  int
 	height int
 }
@@ -85,6 +90,8 @@ func New(client vmw.VMClient) Model {
 		client:       client,
 		now:          time.Now(),
 		pickerCursor: ui.DefaultPresetIndex,
+		keys:         newKeyMap(),
+		help:         help.New(),
 	}
 }
 
@@ -100,6 +107,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.help.SetWidth(msg.Width)
 		m.clampCursor()
 		return m, nil
 
@@ -196,6 +204,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handlePickerKey(msg)
 	case StatePeek:
 		return m.handlePeekKey(msg)
+	case StateHelp:
+		return m.handleHelpKey(msg)
 	default:
 		return m.handleNormalKey(msg)
 	}
@@ -203,10 +213,14 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case matchKey(msg, "q", "ctrl+c"):
+	case key.Matches(msg, m.keys.Quit):
 		return m, tea.Quit
 
-	case matchKey(msg, "up", "k"):
+	case key.Matches(msg, m.keys.Help):
+		m.state = StateHelp
+		return m, nil
+
+	case key.Matches(msg, m.keys.Up):
 		if m.cursor > 0 {
 			m.cursor--
 			// Skip non-selectable VMs (unmanaged or collapsed halted)
@@ -220,7 +234,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case matchKey(msg, "down", "j"):
+	case key.Matches(msg, m.keys.Down):
 		last := m.lastSelectableIndex()
 		if m.cursor < last {
 			m.cursor++
@@ -235,14 +249,14 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case matchKey(msg, "r"):
+	case key.Matches(msg, m.keys.Refresh):
 		if !m.refreshing {
 			m.refreshing = true
 			return m, fetchStatus(m.client)
 		}
 		return m, nil
 
-	case matchKey(msg, "h"):
+	case key.Matches(msg, m.keys.Halt):
 		if vm := m.selectedVM(); vm != nil && vm.State == "running" && !m.hasPendingAction(vm.ID) {
 			m.state = StateConfirm
 			m.confirmAction = "halt"
@@ -250,7 +264,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case matchKey(msg, "d"):
+	case key.Matches(msg, m.keys.Destroy):
 		if vm := m.selectedVM(); vm != nil && !m.hasPendingAction(vm.ID) {
 			m.state = StateConfirm
 			m.confirmAction = "destroy"
@@ -258,7 +272,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case matchKey(msg, "x"):
+	case key.Matches(msg, m.keys.Exempt):
 		if vm := m.selectedVM(); vm != nil && !m.hasPendingAction(vm.ID) {
 			m.state = StateConfirm
 			m.confirmAction = "exempt"
@@ -266,7 +280,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case matchKey(msg, "i"):
+	case key.Matches(msg, m.keys.Indefinite):
 		if vm := m.selectedVM(); vm != nil && !m.hasPendingAction(vm.ID) {
 			m.state = StateConfirm
 			m.confirmAction = "set indefinite"
@@ -274,7 +288,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case matchKey(msg, "e"):
+	case key.Matches(msg, m.keys.Extend):
 		if vm := m.selectedVM(); vm != nil && !m.hasPendingAction(vm.ID) {
 			m.state = StatePicker
 			m.confirmVM = vm
@@ -282,14 +296,14 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case matchKey(msg, "s"):
+	case key.Matches(msg, m.keys.Sweep):
 		if !m.sweeping {
 			m.sweeping = true
 			return m, doSweep(m.client)
 		}
 		return m, nil
 
-	case matchKey(msg, "u"):
+	case key.Matches(msg, m.keys.Update):
 		if vm := m.selectedVM(); vm != nil && vm.TemplateVersion != nil && !m.hasPendingAction(vm.ID) {
 			m.state = StateConfirm
 			m.confirmAction = "update template for"
@@ -297,7 +311,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case matchKey(msg, "shift+u"):
+	case key.Matches(msg, m.keys.UpdateAll):
 		if m.pendingAction == "" {
 			m.state = StateConfirm
 			m.confirmAction = "update all templates for"
@@ -305,7 +319,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case matchKey(msg, "p"):
+	case key.Matches(msg, m.keys.Peek):
 		if vm := m.selectedVM(); vm != nil && vm.State == "running" && !m.hasPendingAction(vm.ID) {
 			if m.peekCancel != nil {
 				m.peekCancel()
@@ -319,7 +333,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case matchKey(msg, "esc"):
+	case key.Matches(msg, m.keys.Escape):
 		if m.peekLoading && m.peekCancel != nil {
 			m.peekCancel()
 			m.peekLoading = false
@@ -336,7 +350,10 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case matchKey(msg, "y"):
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit
+
+	case key.Matches(msg, m.keys.ConfirmYes):
 		vm := m.confirmVM
 		action := m.confirmAction
 		// For update actions, ask about provisioning before dispatching
@@ -351,7 +368,7 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.confirmVM = nil
 		return m, doAction(m.client, action, vm)
 
-	case matchKey(msg, "n", "esc"):
+	case key.Matches(msg, m.keys.ConfirmNo), key.Matches(msg, m.keys.Escape):
 		m.state = StateNormal
 		m.confirmVM = nil
 		return m, nil
@@ -361,7 +378,10 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleProvisionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case matchKey(msg, "y"):
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit
+
+	case key.Matches(msg, m.keys.ConfirmYes):
 		vm := m.confirmVM
 		action := m.confirmAction + " --provision"
 		m.pendingAction = action
@@ -371,7 +391,7 @@ func (m Model) handleProvisionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.confirmVM = nil
 		return m, doAction(m.client, action, vm)
 
-	case matchKey(msg, "n"):
+	case key.Matches(msg, m.keys.ConfirmNo):
 		vm := m.confirmVM
 		action := m.confirmAction
 		m.pendingAction = action
@@ -381,7 +401,7 @@ func (m Model) handleProvisionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.confirmVM = nil
 		return m, doAction(m.client, action, vm)
 
-	case matchKey(msg, "esc"):
+	case key.Matches(msg, m.keys.Escape):
 		m.state = StateNormal
 		m.confirmVM = nil
 		return m, nil
@@ -391,19 +411,22 @@ func (m Model) handleProvisionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case matchKey(msg, "left", "h"):
+	case key.Matches(msg, m.keys.Quit):
+		return m, tea.Quit
+
+	case key.Matches(msg, m.keys.PickerLeft):
 		if m.pickerCursor > 0 {
 			m.pickerCursor--
 		}
 		return m, nil
 
-	case matchKey(msg, "right", "l"):
+	case key.Matches(msg, m.keys.PickerRight):
 		if m.pickerCursor < len(ui.DurationPresets)-1 {
 			m.pickerCursor++
 		}
 		return m, nil
 
-	case matchKey(msg, "enter"):
+	case key.Matches(msg, m.keys.PickerEnter):
 		vm := m.confirmVM
 		duration := ui.DurationPresets[m.pickerCursor]
 		m.pendingAction = "extend"
@@ -413,8 +436,7 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.confirmVM = nil
 		return m, doExtend(m.client, vm, duration)
 
-	case matchKey(msg, "esc"):
-		m.state = StatePicker
+	case key.Matches(msg, m.keys.Escape):
 		m.state = StateNormal
 		m.confirmVM = nil
 		return m, nil
@@ -424,7 +446,10 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handlePeekKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case matchKey(msg, "esc", "q"):
+	case msg.String() == "ctrl+c":
+		return m, tea.Quit
+
+	case key.Matches(msg, m.keys.Escape), msg.String() == "q":
 		if m.peekCancel != nil {
 			m.peekCancel()
 			m.peekCancel = nil
@@ -435,17 +460,17 @@ func (m Model) handlePeekKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.peekScroll = 0
 		return m, nil
 
-	case matchKey(msg, "up", "k"):
+	case key.Matches(msg, m.keys.Up):
 		if m.peekScroll > 0 {
 			m.peekScroll--
 		}
 		return m, nil
 
-	case matchKey(msg, "down", "j"):
+	case key.Matches(msg, m.keys.Down):
 		m.peekScroll++
 		return m, nil
 
-	case matchKey(msg, "r"):
+	case key.Matches(msg, m.keys.Refresh):
 		if m.peekVM != nil && !m.peekLoading {
 			if m.peekCancel != nil {
 				m.peekCancel()
@@ -456,6 +481,20 @@ func (m Model) handlePeekKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.peekStartTime = m.now
 			return m, doPeek(ctx, m.client, m.peekVM)
 		}
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m Model) handleHelpKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case msg.String() == "ctrl+c":
+		return m, tea.Quit
+	case key.Matches(msg, m.keys.Help), key.Matches(msg, m.keys.Escape):
+		m.state = StateNormal
+		return m, nil
+	case msg.String() == "q":
+		m.state = StateNormal
 		return m, nil
 	}
 	return m, nil
@@ -475,6 +514,18 @@ func (m Model) View() tea.View {
 		peekElapsed := int(m.now.Sub(m.peekStartTime).Seconds())
 		content := ui.RenderPeekOverlay(m.peekVM.Name, termRendered, processes,
 			m.peekScroll, m.width, m.height, m.peekLoading, peekElapsed)
+		lines := strings.Count(content, "\n") + 1
+		if lines < m.height {
+			content += strings.Repeat("\n", m.height-lines-1)
+		}
+		v := tea.NewView(lipgloss.NewStyle().MaxWidth(m.width).Render(content))
+		v.AltScreen = true
+		return v
+	}
+
+	// Help overlay (full-screen replacement)
+	if m.state == StateHelp {
+		content := ui.RenderHelpOverlay(m.help, m.keys, m.width, m.height)
 		lines := strings.Count(content, "\n") + 1
 		if lines < m.height {
 			content += strings.Repeat("\n", m.height-lines-1)
@@ -617,8 +668,11 @@ func (m Model) View() tea.View {
 	}
 
 	// Footer
+	vm := m.selectedVM()
+	m.keys.updateKeyStates(vm, m.pendingAction != "", m.sweeping)
+	helpView := m.help.View(m.keys)
 	b.WriteString("\n")
-	b.WriteString(ui.RenderFooter(m.width, m.status.LastSweep, m.lastRefresh, m.now))
+	b.WriteString(ui.RenderFooter(m.width, helpView, m.status.LastSweep, m.lastRefresh, m.now))
 
 	// Pad to fill terminal height to prevent flickering
 	rendered := b.String()
