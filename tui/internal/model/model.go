@@ -315,7 +315,7 @@ func (m Model) handleConfirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.confirmVM = nil
 		return m, doAction(m.client, action, vm)
 
-	case matchKey(msg, "n", "escape"):
+	case matchKey(msg, "n", "esc"):
 		m.state = StateNormal
 		m.confirmVM = nil
 		return m, nil
@@ -345,7 +345,7 @@ func (m Model) handleProvisionKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.confirmVM = nil
 		return m, doAction(m.client, action, vm)
 
-	case matchKey(msg, "escape"):
+	case matchKey(msg, "esc"):
 		m.state = StateNormal
 		m.confirmVM = nil
 		return m, nil
@@ -377,7 +377,7 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.confirmVM = nil
 		return m, doExtend(m.client, vm, duration)
 
-	case matchKey(msg, "escape"):
+	case matchKey(msg, "esc"):
 		m.state = StatePicker
 		m.state = StateNormal
 		m.confirmVM = nil
@@ -388,7 +388,7 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handlePeekKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case matchKey(msg, "escape", "q"):
+	case matchKey(msg, "esc", "q"):
 		m.state = StateNormal
 		m.peekVM = nil
 		m.peekRaw = ""
