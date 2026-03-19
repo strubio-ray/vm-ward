@@ -2,6 +2,18 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.5.0](https://github.com/strubio-ray/vm-ward/compare/d77836a6974ac4fd3aef7052b0978292cfaf4188..v1.5.0) - 2026-03-19
+#### Features
+- (**tui**) add in-progress indicator and duplicate action guard - ([48834ae](https://github.com/strubio-ray/vm-ward/commit/48834ae1fe669a2b54e91bbece88326818873119)) - Steven
+- (**tui**) add provisioning prompt after template update confirmation - ([d77836a](https://github.com/strubio-ray/vm-ward/commit/d77836a6974ac4fd3aef7052b0978292cfaf4188)) - Steven
+- add peek command to view VM terminal output and processes - ([efad7ac](https://github.com/strubio-ray/vm-ward/commit/efad7ac31eb127339ebf47d094d5af0b11c61469)) - Steven
+#### Bug Fixes
+- use correct charmbracelet/x/vt API for peek rendering - ([6ad0c00](https://github.com/strubio-ray/vm-ward/commit/6ad0c00f5105ca6167b4cad99e73a0ad591c5938)) - Steven
+#### Miscellaneous Chores
+- add charmbracelet/x/vt dependency - ([a9e92d9](https://github.com/strubio-ray/vm-ward/commit/a9e92d95f0ba40f5f4a6bac0d88496bf8dbfa984)) - Steven
+
+- - -
+
 ## [v1.4.1](https://github.com/strubio-ray/vm-ward/compare/81d7b06b4997b66e59968392998dbc7c2a75c2d6..v1.4.1) - 2026-03-18
 #### Bug Fixes
 - (**tui**) show multi-line error toasts with longer display time - ([81d7b06](https://github.com/strubio-ray/vm-ward/commit/81d7b06b4997b66e59968392998dbc7c2a75c2d6)) - Steven
