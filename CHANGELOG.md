@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.7.0](https://github.com/strubio-ray/vm-ward/compare/7a61268049654180e80b8de4f2c918984574ee12..v1.7.0) - 2026-03-19
+#### Features
+- (**tui**) adopt bubbles/help for responsive keybinding display - ([fd6c671](https://github.com/strubio-ray/vm-ward/commit/fd6c671d99d6eed6203537def3166b60551f2b72)) - Steven
+#### Miscellaneous Chores
+- (**tui**) add charm.land/bubbles/v2 dependency - ([7a61268](https://github.com/strubio-ray/vm-ward/commit/7a61268049654180e80b8de4f2c918984574ee12)) - Steven
+
+- - -
+
 ## [v1.6.1](https://github.com/strubio-ray/vm-ward/compare/f4e355e1b6a41e42d7244a125fd4efd8fef6fd40..v1.6.1) - 2026-03-19
 #### Features
 - (**tui**) auto-collapse sections based on terminal height - ([f4e355e](https://github.com/strubio-ray/vm-ward/commit/f4e355e1b6a41e42d7244a125fd4efd8fef6fd40)) - Steven
