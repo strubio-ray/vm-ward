@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.5.1](https://github.com/strubio-ray/vm-ward/compare/6f5166549760c563beb16b1e51a873ee92a04797..v1.5.1) - 2026-03-19
+#### Bug Fixes
+- (**peek**) replace GNU timeout with portable perl alarm for macOS - ([6f51665](https://github.com/strubio-ray/vm-ward/commit/6f5166549760c563beb16b1e51a873ee92a04797)) - Steven
+
+- - -
+
 ## [v1.5.0](https://github.com/strubio-ray/vm-ward/compare/d77836a6974ac4fd3aef7052b0978292cfaf4188..v1.5.0) - 2026-03-19
 #### Features
 - (**tui**) add in-progress indicator and duplicate action guard - ([48834ae](https://github.com/strubio-ray/vm-ward/commit/48834ae1fe669a2b54e91bbece88326818873119)) - Steven
