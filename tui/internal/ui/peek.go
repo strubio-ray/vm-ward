@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/x/vt"
+	"github.com/charmbracelet/x/vt"
 )
 
 // ParsePeekOutput splits raw peek output into terminal log and processes sections.
@@ -24,9 +24,9 @@ func ParsePeekOutput(raw string) (termLog string, processes string) {
 // RenderTerminalLog processes raw script output through a virtual terminal
 // emulator and returns clean SGR-attributed text.
 func RenderTerminalLog(raw string, cols, rows int) string {
-	term := vt.NewTerminal(cols, rows)
+	term := vt.NewEmulator(cols, rows)
 	term.Write([]byte(raw))
-	return term.String()
+	return term.Render()
 }
 
 // RenderPeekOverlay renders the full-screen peek view with header, terminal
