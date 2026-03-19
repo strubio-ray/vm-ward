@@ -20,7 +20,8 @@ share/vm-ward/       # launchd plist template
 - **Sweep** runs every 5 min via launchd — warns at T1 (50%) and T2 (87.5%), halts on expiry. Activity detection uses `VBoxManage metrics query` (host-side CPU%). First sweep after VM start returns "idle" (metrics need one sampling period to populate). Writes epoch to `last-sweep` after each run. Cleans up halted leases >24h old and expired standard leases for poweroff VMs.
 - **Event log**: `~/.local/state/vm-ward/events.jsonl` — structured JSONL log of lease/halt events, auto-trimmed to 500 lines.
 - **Version placeholder**: `bin/vmw` contains `VMW_VERSION="%%VERSION%%"` — injected by Homebrew formula at install time.
-- **Interactive dashboard**: `vmw` or `vmw status` launches the TUI dashboard (Go/bubbletea). `vmw status --json` returns machine-readable JSON for scripting. The TUI supports keybindings for extend, halt, destroy, exempt, update template (`u`), and update all templates (`U`).
+- **Interactive dashboard**: `vmw` or `vmw status` launches the TUI dashboard (Go/bubbletea). `vmw status --json` returns machine-readable JSON for scripting. The TUI supports keybindings for extend, halt, destroy, exempt, update template (`u`), update all templates (`U`), and peek inside VMs (`p`).
+- **Peek**: `vmw peek` SSHes into a running VM to show terminal session output (from `script` auto-logging) and top processes. Requires VMs to have terminal logging enabled (provisioned by copier-agent-sandbox template). The TUI renders raw terminal output through a virtual terminal emulator (`charmbracelet/x/vt`) for full color fidelity.
 - **Status JSON schema**: `vmw status --json` returns `{daemon, last_sweep, recent_events, vms}` wrapper object (not a bare array). Each VM includes `section` (`active`|`halted`), `duration`, `halted_at`, and `template_version` fields.
 - **Template tracking**: `vmw update` runs `copier update` across projects created from copier templates. Template version (from `.vm/.copier-answers.yml`) is shown in the TEMPLATE column of the dashboard.
 
@@ -48,5 +49,6 @@ VBoxManage list runningvms       # Cross-check running VMs
 vmw update .                     # Update current project's copier template
 vmw update --all                 # Update all copier-managed projects
 vmw update --all --provision     # Update all and reload running VMs
+vmw peek .                       # Peek inside current project's VM
 cog bump --patch                 # Release a patch version
 ```

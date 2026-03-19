@@ -30,6 +30,11 @@ type actionMsg struct {
 type sweepMsg struct {
 	err error
 }
+type peekMsg struct {
+	vmName string
+	raw    string
+	err    error
+}
 
 // Model is the bubbletea Model for the vm-ward TUI.
 type Model struct {
@@ -57,6 +62,11 @@ type Model struct {
 	pendingAction string
 	pendingVMName string
 	pendingVMID   string
+
+	peekVM      *vmw.VM
+	peekRaw     string
+	peekScroll  int
+	peekLoading bool
 
 	width  int
 	height int
@@ -138,6 +148,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refreshing = true
 		return m, fetchStatus(m.client)
 
+	case peekMsg:
+		m.peekLoading = false
+		if msg.err != nil {
+			m.toast = ui.NewToast(fmt.Sprintf("Peek failed: %s", errorDetail(msg.err, m.width-6, 3)), true, errorToastTTL)
+			m.peekVM = nil
+		} else {
+			m.state = StatePeek
+			m.peekRaw = msg.raw
+			m.peekScroll = 0
+		}
+		return m, nil
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
@@ -153,6 +175,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleProvisionKey(msg)
 	case StatePicker:
 		return m.handlePickerKey(msg)
+	case StatePeek:
+		return m.handlePeekKey(msg)
 	default:
 		return m.handleNormalKey(msg)
 	}
@@ -261,6 +285,14 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.confirmVM = &vmw.VM{Name: "all VMs", Managed: true}
 		}
 		return m, nil
+
+	case matchKey(msg, "p"):
+		if vm := m.selectedVM(); vm != nil && vm.State == "running" && !m.hasPendingAction(vm.ID) {
+			m.peekVM = vm
+			m.peekLoading = true
+			return m, doPeek(m.client, vm)
+		}
+		return m, nil
 	}
 
 	return m, nil
@@ -354,9 +386,53 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handlePeekKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case matchKey(msg, "escape", "q"):
+		m.state = StateNormal
+		m.peekVM = nil
+		m.peekRaw = ""
+		m.peekScroll = 0
+		return m, nil
+
+	case matchKey(msg, "up", "k"):
+		if m.peekScroll > 0 {
+			m.peekScroll--
+		}
+		return m, nil
+
+	case matchKey(msg, "down", "j"):
+		m.peekScroll++
+		return m, nil
+
+	case matchKey(msg, "r"):
+		if m.peekVM != nil && !m.peekLoading {
+			m.peekLoading = true
+			return m, doPeek(m.client, m.peekVM)
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
 func (m Model) View() tea.View {
 	if m.width == 0 {
 		v := tea.NewView("Loading...")
+		v.AltScreen = true
+		return v
+	}
+
+	// Peek overlay (full-screen replacement)
+	if m.state == StatePeek && m.peekRaw != "" {
+		termLog, processes := ui.ParsePeekOutput(m.peekRaw)
+		termRendered := ui.RenderTerminalLog(termLog, m.width-4, 24)
+		content := ui.RenderPeekOverlay(m.peekVM.Name, termRendered, processes,
+			m.peekScroll, m.width, m.height, m.peekLoading)
+		lines := strings.Count(content, "\n") + 1
+		if lines < m.height {
+			content += strings.Repeat("\n", m.height-lines-1)
+		}
+		v := tea.NewView(lipgloss.NewStyle().MaxWidth(m.width).Render(content))
 		v.AltScreen = true
 		return v
 	}
@@ -385,6 +461,12 @@ func (m Model) View() tea.View {
 	if m.pendingAction != "" {
 		label := fmt.Sprintf("  %s %s...", progressLabel(m.pendingAction), m.pendingVMName)
 		b.WriteString(ui.Yellow.Render(label))
+		b.WriteString("\n")
+	}
+
+	// Peek loading indicator
+	if m.peekLoading && m.state != StatePeek {
+		b.WriteString(ui.Yellow.Render(fmt.Sprintf("  Peeking %s...", m.peekVM.Name)))
 		b.WriteString("\n")
 	}
 
@@ -626,6 +708,13 @@ func doSweep(client vmw.VMClient) tea.Cmd {
 	return func() tea.Msg {
 		err := client.Sweep()
 		return sweepMsg{err}
+	}
+}
+
+func doPeek(client vmw.VMClient, vm *vmw.VM) tea.Cmd {
+	return func() tea.Msg {
+		raw, err := client.Peek(vm.ID)
+		return peekMsg{vm.Name, raw, err}
 	}
 }
 

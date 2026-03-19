@@ -17,6 +17,7 @@ type VMClient interface {
 	Sweep() error
 	Update(identifier string, provision bool) error
 	UpdateAll(provision bool) error
+	Peek(identifier string) (string, error)
 }
 
 // ExecClient implements VMClient by shelling out to the vmw binary.
@@ -77,6 +78,11 @@ func (c *ExecClient) Update(identifier string, provision bool) error {
 	}
 	_, err := c.run(args...)
 	return err
+}
+
+func (c *ExecClient) Peek(identifier string) (string, error) {
+	out, err := c.run("peek", identifier)
+	return string(out), err
 }
 
 func (c *ExecClient) UpdateAll(provision bool) error {

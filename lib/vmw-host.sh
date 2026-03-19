@@ -934,6 +934,43 @@ cmd_uninstall() {
   echo "vm-ward daemon uninstalled."
 }
 
+cmd_peek() {
+  init_state
+  local name="${1:-.}"
+  local machine_id
+  machine_id=$(resolve_vm "$name")
+
+  local machines
+  machines=$(read_machine_index)
+  local vfp vm_name machine_name vbox_uuid
+  vfp=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].vagrantfile_path // ""')
+  vm_name=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].extra_data.box.name // .[$id].name // "unknown"')
+  machine_name=$(echo "$machines" | jq -r --arg id "$machine_id" '.[$id].name // "default"')
+  vbox_uuid=$(resolve_vbox_uuid "$vfp" "$machine_name")
+
+  local running_vms
+  running_vms=$(get_running_vms)
+  if [ -z "$vbox_uuid" ] || ! echo "$running_vms" | grep -qF "$vbox_uuid" 2>/dev/null; then
+    die "VM '$vm_name' is not running"
+  fi
+
+  local peek_output
+  peek_output=$(timeout 10 bash -c "VAGRANT_CWD=\"$vfp\" vagrant ssh -c '
+    echo \"===TERMINAL_LOG===\"
+    if [ -f ~/.local/state/terminal-logs/current.log ]; then
+      tail -c 32768 ~/.local/state/terminal-logs/current.log
+    else
+      echo \"(no terminal session log found)\"
+    fi
+    echo \"===PROCESSES===\"
+    ps aux --sort=-%cpu | head -20
+  ' 2>/dev/null") || {
+    die "Failed to connect to VM '$vm_name' (timeout or SSH error)"
+  }
+
+  echo "$peek_output"
+}
+
 cmd_tmux_status() {
   if [ -f "$TMUX_CACHE" ]; then
     cat "$TMUX_CACHE"
@@ -964,6 +1001,7 @@ Commands:
   destroy <name|.>           Destroy a VM, delete its disk, and remove lease
   exempt <name|.>            Exempt a VM from auto-halt
   update [.|name|--all] [--provision]  Update copier templates
+  peek [name|.]              Peek inside a running VM
   sweep [--no-activity]      Run enforcement loop (called by launchd)
   install                    Install launchd daemon
   uninstall                  Remove launchd daemon
@@ -985,6 +1023,7 @@ Examples:
   vmw halt .              Halt current project's VM now
   vmw update .            Update current project's copier template
   vmw update --all        Update all copier-managed projects
+  vmw peek .              Peek at current project's VM
 
 Activity detection:
   Sweep checks running VMs for CPU activity via VBoxManage metrics
@@ -1016,6 +1055,7 @@ main() {
       source "${VMW_ROOT}/lib/vmw-update.sh"
       cmd_update "$@"
       ;;
+    peek)        cmd_peek "$@" ;;
     tmux-status) cmd_tmux_status "$@" ;;
     version)     vmw_version ;;
     help|--help|-h) cmd_help ;;
