@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.6.0](https://github.com/strubio-ray/vm-ward/compare/dd821ae9202933d9f15a7b42edc9a9ceeb4f2290..v1.6.0) - 2026-03-19
+#### Features
+- (**tui**) responsive column hiding based on terminal width - ([dd821ae](https://github.com/strubio-ray/vm-ward/commit/dd821ae9202933d9f15a7b42edc9a9ceeb4f2290)) - Steven
+
+- - -
+
 ## [v1.5.4](https://github.com/strubio-ray/vm-ward/compare/59d9fa04260bfcea61ac354a6300934dfef4ce69..v1.5.4) - 2026-03-19
 #### Bug Fixes
 - (**peek**) prevent freeze on first-time SSH connections - ([59d9fa0](https://github.com/strubio-ray/vm-ward/commit/59d9fa04260bfcea61ac354a6300934dfef4ce69)) - Steven
