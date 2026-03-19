@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.5.4](https://github.com/strubio-ray/vm-ward/compare/59d9fa04260bfcea61ac354a6300934dfef4ce69..v1.5.4) - 2026-03-19
+#### Bug Fixes
+- (**peek**) prevent freeze on first-time SSH connections - ([59d9fa0](https://github.com/strubio-ray/vm-ward/commit/59d9fa04260bfcea61ac354a6300934dfef4ce69)) - Steven
+
+- - -
+
 ## [v1.5.3](https://github.com/strubio-ray/vm-ward/compare/e03cb396fdf2e98eba8ac63db289f96c36ff8b0f..v1.5.3) - 2026-03-19
 #### Bug Fixes
 - (**peek**) add timeout, cancellation, and progress indicator - ([e03cb39](https://github.com/strubio-ray/vm-ward/commit/e03cb396fdf2e98eba8ac63db289f96c36ff8b0f)) - Steven
