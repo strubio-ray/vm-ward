@@ -100,6 +100,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.clampCursor()
 		return m, nil
 
 	case tickMsg:
@@ -208,11 +209,11 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case matchKey(msg, "up", "k"):
 		if m.cursor > 0 {
 			m.cursor--
-			// Skip unmanaged VMs
-			for m.cursor > 0 && !m.vms[m.cursor].Managed {
+			// Skip non-selectable VMs (unmanaged or collapsed halted)
+			for m.cursor > 0 && !m.isSelectable(m.cursor) {
 				m.cursor--
 			}
-			if !m.vms[m.cursor].Managed {
+			if !m.isSelectable(m.cursor) {
 				m.cursor++
 			}
 			m.saveSelectedID()
@@ -223,8 +224,8 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		last := m.lastSelectableIndex()
 		if m.cursor < last {
 			m.cursor++
-			// Skip unmanaged VMs
-			for m.cursor <= last && !m.vms[m.cursor].Managed {
+			// Skip non-selectable VMs (unmanaged or collapsed halted)
+			for m.cursor <= last && !m.isSelectable(m.cursor) {
 				m.cursor++
 			}
 			if m.cursor > last {
@@ -529,6 +530,8 @@ func (m Model) View() tea.View {
 		b.WriteString(ui.Dim.Render("  No Vagrant VMs found"))
 		b.WriteString("\n")
 	} else {
+		layout := m.computeLayout()
+
 		// Active managed VMs
 		anyRendered := false
 		for i, vm := range m.vms {
@@ -541,40 +544,38 @@ func (m Model) View() tea.View {
 		}
 
 		// Halted managed VMs
-		hasHalted := false
-		for _, vm := range m.vms {
-			if vm.Managed && vm.Section == "halted" {
-				hasHalted = true
-				break
+		switch layout.showHalted {
+		case haltedFull:
+			if layout.haltedCount > 0 {
+				if anyRendered {
+					b.WriteString("\n")
+				}
+				b.WriteString(ui.RenderSectionHeader("RECENTLY HALTED / EXPIRED"))
+				b.WriteString("\n")
+				b.WriteString(ui.RenderSeparator(m.width))
+				b.WriteString("\n")
+				for i, vm := range m.vms {
+					if !vm.Managed || vm.Section != "halted" {
+						continue
+					}
+					b.WriteString(ui.RenderRow(vm, m.now, i == m.cursor, m.width))
+					b.WriteString("\n")
+				}
+				anyRendered = true
 			}
-		}
-		if hasHalted {
+		case haltedSummary:
 			if anyRendered {
 				b.WriteString("\n")
 			}
-			b.WriteString(ui.RenderSectionHeader("RECENTLY HALTED / EXPIRED"))
+			b.WriteString(ui.RenderCollapsedSummary(layout.haltedCount, "recently halted"))
 			b.WriteString("\n")
-			b.WriteString(ui.RenderSeparator(m.width))
-			b.WriteString("\n")
-			for i, vm := range m.vms {
-				if !vm.Managed || vm.Section != "halted" {
-					continue
-				}
-				b.WriteString(ui.RenderRow(vm, m.now, i == m.cursor, m.width))
-				b.WriteString("\n")
-			}
 			anyRendered = true
+		case haltedNone:
+			// skip
 		}
 
 		// Unmanaged VMs (non-selectable, dimmed)
-		hasUnmanaged := false
-		for _, vm := range m.vms {
-			if !vm.Managed {
-				hasUnmanaged = true
-				break
-			}
-		}
-		if hasUnmanaged {
+		if layout.showUnmanaged && layout.unmanagedCount > 0 {
 			if anyRendered {
 				b.WriteString("\n")
 			}
@@ -631,6 +632,149 @@ func (m Model) View() tea.View {
 	return v
 }
 
+// haltedDisplay controls how the halted section renders.
+type haltedDisplay string
+
+const (
+	haltedFull    haltedDisplay = "full"
+	haltedSummary haltedDisplay = "summary"
+	haltedNone    haltedDisplay = "none"
+)
+
+type sectionLayout struct {
+	showHalted     haltedDisplay
+	showUnmanaged  bool
+	activeCount    int
+	haltedCount    int
+	unmanagedCount int
+}
+
+// computeLayout determines which sections to show based on terminal height.
+func (m Model) computeLayout() sectionLayout {
+	var active, halted, unmanaged int
+	for _, vm := range m.vms {
+		if !vm.Managed {
+			unmanaged++
+		} else if vm.Section == "halted" {
+			halted++
+		} else {
+			active++
+		}
+	}
+
+	layout := sectionLayout{
+		activeCount:    active,
+		haltedCount:    halted,
+		unmanagedCount: unmanaged,
+		showHalted:     haltedFull,
+		showUnmanaged:  true,
+	}
+
+	if m.height == 0 || len(m.vms) == 0 {
+		return layout
+	}
+
+	// Calculate fixed overhead (lines consumed by non-VM content).
+	overhead := 0
+
+	if m.err != nil {
+		overhead += 2 // error line + blank
+	}
+	if m.status.Daemon.State != "running" && m.status.Daemon.State != "" {
+		overhead++ // daemon warning
+	}
+	if m.sweeping {
+		overhead++ // sweeping indicator
+	}
+	if m.pendingAction != "" {
+		overhead++ // action progress
+	}
+	if m.peekLoading && m.peekVM != nil && m.state != StatePeek {
+		overhead++ // peek loading
+	}
+
+	overhead += 2 // table header + separator
+
+	if m.toast != nil && m.toast.IsVisible(m.now) {
+		overhead += 1 + m.toast.Lines() // blank + toast lines
+	}
+
+	switch m.state {
+	case StateConfirm, StateConfirmProvision, StatePicker:
+		overhead += 2 // blank + confirm/picker line
+	}
+
+	overhead += 2 // blank + footer
+
+	available := m.height - overhead - active
+
+	// Cost of full halted section: header + separator + rows.
+	// Plus a blank line if active VMs were rendered before it.
+	haltedFullCost := 0
+	if halted > 0 {
+		haltedFullCost = 2 + halted // header + separator + rows
+		if active > 0 {
+			haltedFullCost++ // blank separator
+		}
+	}
+
+	// Cost of halted summary: just 1 line (or 2 with blank separator).
+	haltedSummaryCost := 0
+	if halted > 0 {
+		haltedSummaryCost = 1
+		if active > 0 {
+			haltedSummaryCost++ // blank separator
+		}
+	}
+
+	// Cost of full unmanaged section.
+	unmanagedFullCost := 0
+	if unmanaged > 0 {
+		unmanagedFullCost = 2 + unmanaged // header + separator + rows
+		if active > 0 || halted > 0 {
+			unmanagedFullCost++ // blank separator
+		}
+	}
+
+	// Decision logic: try to fit everything, then progressively collapse.
+	if available >= haltedFullCost+unmanagedFullCost {
+		// Everything fits.
+		return layout
+	}
+
+	// Hide unmanaged first.
+	layout.showUnmanaged = false
+
+	if available >= haltedFullCost {
+		return layout
+	}
+
+	// Collapse halted to summary.
+	if halted > 0 && available >= haltedSummaryCost {
+		layout.showHalted = haltedSummary
+		return layout
+	}
+
+	// Hide halted entirely.
+	if halted > 0 {
+		layout.showHalted = haltedNone
+	}
+
+	return layout
+}
+
+// isSelectable returns whether the VM at index idx can be selected by the cursor.
+func (m Model) isSelectable(idx int) bool {
+	vm := m.vms[idx]
+	if !vm.Managed {
+		return false
+	}
+	if vm.Section == "halted" && m.computeLayout().showHalted != haltedFull {
+		return false
+	}
+	return true
+}
+
 // Helpers
 
 func (m *Model) hasPendingAction(vmID string) bool {
@@ -638,7 +782,7 @@ func (m *Model) hasPendingAction(vmID string) bool {
 }
 
 func (m *Model) selectedVM() *vmw.VM {
-	if m.cursor >= 0 && m.cursor < len(m.vms) && m.vms[m.cursor].Managed {
+	if m.cursor >= 0 && m.cursor < len(m.vms) && m.isSelectable(m.cursor) {
 		return &m.vms[m.cursor]
 	}
 	return nil
@@ -686,10 +830,10 @@ func sectionOrder(vm vmw.VM) int {
 	}
 }
 
-// lastSelectableIndex returns the index of the last managed VM.
+// lastSelectableIndex returns the index of the last selectable VM.
 func (m *Model) lastSelectableIndex() int {
 	for i := len(m.vms) - 1; i >= 0; i-- {
-		if m.vms[i].Managed {
+		if m.isSelectable(i) {
 			return i
 		}
 	}

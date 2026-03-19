@@ -184,6 +184,15 @@ func RenderSectionHeader(label string) string {
 	return Dim.Italic(true).Render(label)
 }
 
+// RenderCollapsedSummary renders a dim one-line summary for a collapsed section.
+func RenderCollapsedSummary(count int, sectionLabel string) string {
+	noun := "VM"
+	if count != 1 {
+		noun = "VMs"
+	}
+	return Dim.Italic(true).Render(fmt.Sprintf("  %d %s %s", count, sectionLabel, noun))
+}
+
 // TimeLeft calculates remaining time from ExpiresAt, falling back to the
 // pre-formatted Remaining string for non-timed leases.
 func TimeLeft(vm vmw.VM, now time.Time) string {
