@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.5.3](https://github.com/strubio-ray/vm-ward/compare/e03cb396fdf2e98eba8ac63db289f96c36ff8b0f..v1.5.3) - 2026-03-19
+#### Bug Fixes
+- (**peek**) add timeout, cancellation, and progress indicator - ([e03cb39](https://github.com/strubio-ray/vm-ward/commit/e03cb396fdf2e98eba8ac63db289f96c36ff8b0f)) - Steven
+
+- - -
+
 ## [v1.5.2](https://github.com/strubio-ray/vm-ward/compare/b9464dda87b1215d69534a1bb1c6ef18abfbde96..v1.5.2) - 2026-03-19
 #### Bug Fixes
 - (**tui**) use correct escape key name for bubbletea v2 - ([b9464dd](https://github.com/strubio-ray/vm-ward/commit/b9464dda87b1215d69534a1bb1c6ef18abfbde96)) - Steven
