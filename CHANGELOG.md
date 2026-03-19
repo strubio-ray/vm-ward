@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.6.1](https://github.com/strubio-ray/vm-ward/compare/f4e355e1b6a41e42d7244a125fd4efd8fef6fd40..v1.6.1) - 2026-03-19
+#### Features
+- (**tui**) auto-collapse sections based on terminal height - ([f4e355e](https://github.com/strubio-ray/vm-ward/commit/f4e355e1b6a41e42d7244a125fd4efd8fef6fd40)) - Steven
+
+- - -
+
 ## [v1.6.0](https://github.com/strubio-ray/vm-ward/compare/dd821ae9202933d9f15a7b42edc9a9ceeb4f2290..v1.6.0) - 2026-03-19
 #### Features
 - (**tui**) responsive column hiding based on terminal width - ([dd821ae](https://github.com/strubio-ray/vm-ward/commit/dd821ae9202933d9f15a7b42edc9a9ceeb4f2290)) - Steven
