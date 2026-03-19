@@ -955,7 +955,7 @@ cmd_peek() {
   fi
 
   local peek_output
-  peek_output=$(timeout 10 bash -c "VAGRANT_CWD=\"$vfp\" vagrant ssh -c '
+  peek_output=$(perl -e 'alarm(shift); exec @ARGV' 10 bash -c "VAGRANT_CWD=\"$vfp\" vagrant ssh -c '
     echo \"===TERMINAL_LOG===\"
     if [ -f ~/.local/state/terminal-logs/current.log ]; then
       tail -c 32768 ~/.local/state/terminal-logs/current.log
