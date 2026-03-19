@@ -113,7 +113,7 @@ get_running_vms() {
   if ! command -v VBoxManage >/dev/null 2>&1; then
     return
   fi
-  VBoxManage list runningvms 2>/dev/null | sed -n 's/^"[^"]*" {\([^}]*\)}/\1/p'
+  perl -e 'alarm(shift); exec @ARGV' 5 bash -c 'VBoxManage list runningvms 2>/dev/null' 2>/dev/null | sed -n 's/^"[^"]*" {\([^}]*\)}/\1/p'
 }
 
 # Resolve a Vagrant machine entry to its VirtualBox UUID

@@ -1,9 +1,11 @@
 package vmw
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"syscall"
 )
 
 // VMClient defines operations the TUI can perform against the vmw CLI.
@@ -17,7 +19,7 @@ type VMClient interface {
 	Sweep() error
 	Update(identifier string, provision bool) error
 	UpdateAll(provision bool) error
-	Peek(identifier string) (string, error)
+	Peek(ctx context.Context, identifier string) (string, error)
 }
 
 // ExecClient implements VMClient by shelling out to the vmw binary.
@@ -80,8 +82,21 @@ func (c *ExecClient) Update(identifier string, provision bool) error {
 	return err
 }
 
-func (c *ExecClient) Peek(identifier string) (string, error) {
-	out, err := c.run("peek", identifier)
+func (c *ExecClient) runCtx(ctx context.Context, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, c.VmwPath, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
+	}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("%s %v: %w\n%s", c.VmwPath, args, err, out)
+	}
+	return out, nil
+}
+
+func (c *ExecClient) Peek(ctx context.Context, identifier string) (string, error) {
+	out, err := c.runCtx(ctx, "peek", identifier)
 	return string(out), err
 }
 

@@ -31,13 +31,13 @@ func RenderTerminalLog(raw string, cols, rows int) string {
 
 // RenderPeekOverlay renders the full-screen peek view with header, terminal
 // output, process list, and footer.
-func RenderPeekOverlay(vmName, termRendered, processes string, scroll, width, height int, loading bool) string {
+func RenderPeekOverlay(vmName, termRendered, processes string, scroll, width, height int, loading bool, elapsedSecs int) string {
 	var b strings.Builder
 
 	// Header
 	header := fmt.Sprintf("  Peek: %s", vmName)
 	if loading {
-		header += "  (refreshing...)"
+		header += fmt.Sprintf("  (refreshing… %ds)", elapsedSecs)
 	}
 	b.WriteString(Bold.Render(header))
 	b.WriteString("\n")

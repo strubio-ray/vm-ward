@@ -1,6 +1,8 @@
 package model
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -15,6 +17,9 @@ import (
 const refreshInterval = 30 * time.Second
 const toastTTL = 3 * time.Second
 const errorToastTTL = 10 * time.Second
+const peekTimeout = 30 * time.Second
+
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 // Messages
 type tickMsg time.Time
@@ -63,10 +68,12 @@ type Model struct {
 	pendingVMName string
 	pendingVMID   string
 
-	peekVM      *vmw.VM
-	peekRaw     string
-	peekScroll  int
-	peekLoading bool
+	peekVM        *vmw.VM
+	peekRaw       string
+	peekScroll    int
+	peekLoading   bool
+	peekCancel    context.CancelFunc
+	peekStartTime time.Time
 
 	width  int
 	height int
@@ -150,9 +157,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case peekMsg:
 		m.peekLoading = false
+		m.peekCancel = nil
 		if msg.err != nil {
-			m.toast = ui.NewToast(fmt.Sprintf("Peek failed: %s", errorDetail(msg.err, m.width-6, 3)), true, errorToastTTL)
-			m.peekVM = nil
+			if errors.Is(msg.err, context.Canceled) || errors.Is(msg.err, context.DeadlineExceeded) {
+				// User cancelled or timeout — only show toast if not already shown
+				if m.peekVM != nil {
+					if errors.Is(msg.err, context.DeadlineExceeded) {
+						m.toast = ui.NewToast("Peek timed out", true, errorToastTTL)
+					}
+					m.peekVM = nil
+				}
+			} else {
+				m.toast = ui.NewToast(fmt.Sprintf("Peek failed: %s", errorDetail(msg.err, m.width-6, 3)), true, errorToastTTL)
+				m.peekVM = nil
+			}
 		} else {
 			m.state = StatePeek
 			m.peekRaw = msg.raw
@@ -288,9 +306,26 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case matchKey(msg, "p"):
 		if vm := m.selectedVM(); vm != nil && vm.State == "running" && !m.hasPendingAction(vm.ID) {
+			if m.peekCancel != nil {
+				m.peekCancel()
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), peekTimeout)
 			m.peekVM = vm
 			m.peekLoading = true
-			return m, doPeek(m.client, vm)
+			m.peekCancel = cancel
+			m.peekStartTime = m.now
+			return m, doPeek(ctx, m.client, vm)
+		}
+		return m, nil
+
+	case matchKey(msg, "esc"):
+		if m.peekLoading && m.peekCancel != nil {
+			m.peekCancel()
+			m.peekLoading = false
+			m.peekVM = nil
+			m.peekCancel = nil
+			m.toast = ui.NewToast("Peek cancelled", false, toastTTL)
+			return m, nil
 		}
 		return m, nil
 	}
@@ -389,6 +424,10 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m Model) handlePeekKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case matchKey(msg, "esc", "q"):
+		if m.peekCancel != nil {
+			m.peekCancel()
+			m.peekCancel = nil
+		}
 		m.state = StateNormal
 		m.peekVM = nil
 		m.peekRaw = ""
@@ -407,8 +446,14 @@ func (m Model) handlePeekKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case matchKey(msg, "r"):
 		if m.peekVM != nil && !m.peekLoading {
+			if m.peekCancel != nil {
+				m.peekCancel()
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), peekTimeout)
 			m.peekLoading = true
-			return m, doPeek(m.client, m.peekVM)
+			m.peekCancel = cancel
+			m.peekStartTime = m.now
+			return m, doPeek(ctx, m.client, m.peekVM)
 		}
 		return m, nil
 	}
@@ -426,8 +471,9 @@ func (m Model) View() tea.View {
 	if m.state == StatePeek && m.peekRaw != "" {
 		termLog, processes := ui.ParsePeekOutput(m.peekRaw)
 		termRendered := ui.RenderTerminalLog(termLog, m.width-4, 24)
+		peekElapsed := int(m.now.Sub(m.peekStartTime).Seconds())
 		content := ui.RenderPeekOverlay(m.peekVM.Name, termRendered, processes,
-			m.peekScroll, m.width, m.height, m.peekLoading)
+			m.peekScroll, m.width, m.height, m.peekLoading, peekElapsed)
 		lines := strings.Count(content, "\n") + 1
 		if lines < m.height {
 			content += strings.Repeat("\n", m.height-lines-1)
@@ -465,8 +511,11 @@ func (m Model) View() tea.View {
 	}
 
 	// Peek loading indicator
-	if m.peekLoading && m.state != StatePeek {
-		b.WriteString(ui.Yellow.Render(fmt.Sprintf("  Peeking %s...", m.peekVM.Name)))
+	if m.peekLoading && m.peekVM != nil && m.state != StatePeek {
+		elapsed := int(m.now.Sub(m.peekStartTime).Seconds())
+		frame := spinnerFrames[elapsed%len(spinnerFrames)]
+		label := fmt.Sprintf("  %s Peeking %s... (%ds) — Esc to cancel", frame, m.peekVM.Name, elapsed)
+		b.WriteString(ui.Yellow.Render(label))
 		b.WriteString("\n")
 	}
 
@@ -711,9 +760,9 @@ func doSweep(client vmw.VMClient) tea.Cmd {
 	}
 }
 
-func doPeek(client vmw.VMClient, vm *vmw.VM) tea.Cmd {
+func doPeek(ctx context.Context, client vmw.VMClient, vm *vmw.VM) tea.Cmd {
 	return func() tea.Msg {
-		raw, err := client.Peek(vm.ID)
+		raw, err := client.Peek(ctx, vm.ID)
 		return peekMsg{vm.Name, raw, err}
 	}
 }
