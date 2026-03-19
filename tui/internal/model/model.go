@@ -520,7 +520,7 @@ func (m Model) View() tea.View {
 	}
 
 	// Table header
-	b.WriteString(ui.RenderHeader())
+	b.WriteString(ui.RenderHeader(m.width))
 	b.WriteString("\n")
 	b.WriteString(ui.RenderSeparator(m.width))
 	b.WriteString("\n")
@@ -535,7 +535,7 @@ func (m Model) View() tea.View {
 			if !vm.Managed || vm.Section == "halted" {
 				continue
 			}
-			b.WriteString(ui.RenderRow(vm, m.now, i == m.cursor))
+			b.WriteString(ui.RenderRow(vm, m.now, i == m.cursor, m.width))
 			b.WriteString("\n")
 			anyRendered = true
 		}
@@ -560,7 +560,7 @@ func (m Model) View() tea.View {
 				if !vm.Managed || vm.Section != "halted" {
 					continue
 				}
-				b.WriteString(ui.RenderRow(vm, m.now, i == m.cursor))
+				b.WriteString(ui.RenderRow(vm, m.now, i == m.cursor, m.width))
 				b.WriteString("\n")
 			}
 			anyRendered = true
@@ -586,7 +586,7 @@ func (m Model) View() tea.View {
 				if vm.Managed {
 					continue
 				}
-				b.WriteString(ui.RenderRow(vm, m.now, false))
+				b.WriteString(ui.RenderRow(vm, m.now, false, m.width))
 				b.WriteString("\n")
 			}
 		}

@@ -10,35 +10,143 @@ import (
 	"github.com/strubio-ray/vm-ward/tui/internal/vmw"
 )
 
-// Column widths
-const (
-	colName     = 20
-	colProject  = 25
-	colState    = 10
-	colLease    = 12
-	colTimeLeft = 16
-	colActivity = 10
-	colLastAct  = 14
-	colTemplate = 10
-)
-
-func tableWidth() int {
-	return colName + colProject + colState + colLease + colTimeLeft + colActivity + colLastAct + colTemplate + 7 // 7 for spacing
+// Column describes a table column with responsive layout metadata.
+type Column struct {
+	ID       string // key for cellValue switch
+	Label    string // header text
+	Width    int    // preferred width
+	MinWidth int    // minimum before hiding (same as Width = not shrinkable)
+	Priority int    // 0 = essential/never hide, 1 = hide first, 4 = hide last
 }
 
-// RenderHeader returns the bold header row.
-func RenderHeader() string {
-	return HeaderStyle.Render(fmt.Sprintf(
-		"%-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s",
-		colName, "VM NAME",
-		colProject, "PROJECT",
-		colState, "STATE",
-		colLease, "LEASE",
-		colTimeLeft, "TIME LEFT",
-		colActivity, "ACTIVITY",
-		colLastAct, "LAST ACTIVE",
-		colTemplate, "TEMPLATE",
-	))
+// columns defines the table layout in display order.
+var columns = []Column{
+	{ID: "project", Label: "PROJECT", Width: 25, MinWidth: 12, Priority: 0},
+	{ID: "state", Label: "STATE", Width: 10, MinWidth: 10, Priority: 0},
+	{ID: "lease", Label: "LEASE", Width: 12, MinWidth: 12, Priority: 4},
+	{ID: "timeleft", Label: "TIME LEFT", Width: 16, MinWidth: 16, Priority: 0},
+	{ID: "activity", Label: "ACTIVITY", Width: 10, MinWidth: 10, Priority: 3},
+	{ID: "lastactive", Label: "LAST ACTIVE", Width: 14, MinWidth: 14, Priority: 2},
+	{ID: "template", Label: "TEMPLATE", Width: 10, MinWidth: 10, Priority: 1},
+}
+
+// LayoutResult holds the computed column layout for a given terminal width.
+type LayoutResult struct {
+	Cols   []Column
+	Hidden bool
+}
+
+// VisibleColumns computes which columns to show and their widths for the
+// given available width. It shrinks flexible columns first, then hides
+// non-essential columns by priority (lowest priority hidden first).
+func VisibleColumns(availableWidth int) LayoutResult {
+	cols := make([]Column, len(columns))
+	copy(cols, columns)
+
+	total := func(cc []Column) int {
+		w := 0
+		for _, c := range cc {
+			w += c.Width
+		}
+		if len(cc) > 1 {
+			w += len(cc) - 1 // one space between columns
+		}
+		return w
+	}
+
+	// Phase 1: shrink flexible columns to MinWidth.
+	if total(cols) > availableWidth {
+		for i := range cols {
+			if cols[i].MinWidth < cols[i].Width {
+				cols[i].Width = cols[i].MinWidth
+			}
+		}
+	}
+
+	// Phase 2: hide non-essential columns, lowest priority first.
+	hidden := false
+	for pri := 1; pri <= 4; pri++ {
+		if total(cols) <= availableWidth {
+			break
+		}
+		var kept []Column
+		for _, c := range cols {
+			if c.Priority == pri {
+				hidden = true
+				continue
+			}
+			kept = append(kept, c)
+		}
+		cols = kept
+	}
+
+	// If columns were hidden, reserve space for the " …" indicator and
+	// re-check — drop another column if needed.
+	if hidden && total(cols)+2 > availableWidth {
+		for pri := 1; pri <= 4; pri++ {
+			if total(cols)+2 <= availableWidth {
+				break
+			}
+			var kept []Column
+			for _, c := range cols {
+				if c.Priority == pri {
+					continue
+				}
+				kept = append(kept, c)
+			}
+			cols = kept
+		}
+	}
+
+	return LayoutResult{Cols: cols, Hidden: hidden}
+}
+
+func tableWidth() int {
+	w := 0
+	for _, c := range columns {
+		w += c.Width
+	}
+	return w + len(columns) - 1
+}
+
+// cellValue extracts and formats a cell value from a VM by column ID.
+func cellValue(id string, vm vmw.VM, now time.Time) string {
+	switch id {
+	case "project":
+		return filepath.Base(vm.Path)
+	case "state":
+		return vm.State
+	case "lease":
+		return vm.Lease
+	case "timeleft":
+		return TimeLeft(vm, now)
+	case "activity":
+		return formatActivity(vm.LastActivity)
+	case "lastactive":
+		return FormatAgo(lastActiveTime(vm), now)
+	case "template":
+		if vm.TemplateVersion != nil {
+			return *vm.TemplateVersion
+		}
+		return "—"
+	default:
+		return ""
+	}
+}
+
+// RenderHeader returns the bold header row, responsive to terminal width.
+func RenderHeader(width int) string {
+	layout := VisibleColumns(width)
+	parts := make([]string, len(layout.Cols))
+	for i, col := range layout.Cols {
+		parts[i] = fmt.Sprintf("%-*s", col.Width, col.Label)
+	}
+	line := strings.Join(parts, " ")
+	rendered := HeaderStyle.Render(line)
+	if layout.Hidden {
+		rendered += " " + Dim.Render("…")
+	}
+	return rendered
 }
 
 // RenderSeparator returns a line of ─ characters.
@@ -50,38 +158,25 @@ func RenderSeparator(width int) string {
 	return Dim.Render(strings.Repeat("─", w))
 }
 
-// RenderRow renders a single VM row with appropriate coloring.
-func RenderRow(vm vmw.VM, now time.Time, selected bool) string {
-	name := truncate(vm.Name, colName)
-	project := truncate(filepath.Base(vm.Path), colProject)
-	state := truncate(vm.State, colState)
-	lease := truncate(vm.Lease, colLease)
-	timeLeft := truncate(TimeLeft(vm, now), colTimeLeft)
-	activity := truncate(formatActivity(vm.LastActivity), colActivity)
-	lastActive := truncate(FormatAgo(lastActiveTime(vm), now), colLastAct)
-	tplVer := "—"
-	if vm.TemplateVersion != nil {
-		tplVer = *vm.TemplateVersion
+// RenderRow renders a single VM row with appropriate coloring, responsive to terminal width.
+func RenderRow(vm vmw.VM, now time.Time, selected bool, width int) string {
+	layout := VisibleColumns(width)
+	parts := make([]string, len(layout.Cols))
+	for i, col := range layout.Cols {
+		val := truncate(cellValue(col.ID, vm, now), col.Width)
+		parts[i] = fmt.Sprintf("%-*s", col.Width, val)
 	}
-	template := truncate(tplVer, colTemplate)
-
-	line := fmt.Sprintf(
-		"%-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s",
-		colName, name,
-		colProject, project,
-		colState, state,
-		colLease, lease,
-		colTimeLeft, timeLeft,
-		colActivity, activity,
-		colLastAct, lastActive,
-		colTemplate, template,
-	)
+	line := strings.Join(parts, " ")
 
 	style := rowStyle(vm, now)
 	if selected {
 		style = style.Reverse(true)
 	}
-	return style.Render(line)
+	rendered := style.Render(line)
+	if layout.Hidden {
+		rendered += " " + Dim.Render("…")
+	}
+	return rendered
 }
 
 // RenderSectionHeader renders a dim italic section label.
