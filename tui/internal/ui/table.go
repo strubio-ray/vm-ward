@@ -273,7 +273,7 @@ func formatActivity(activity *string, cpuPct *int, threshold int, vmState string
 	if cpuPct != nil && *cpuPct >= 0 {
 		return fmt.Sprintf("%d%%", *cpuPct)
 	}
-	return *activity
+	return "—"
 }
 
 // ActivityStyle returns the lipgloss style for the activity value.
