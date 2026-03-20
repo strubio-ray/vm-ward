@@ -868,13 +868,33 @@ func (m *Model) preserveCursor() {
 }
 
 // sortVMs orders VMs so active section comes before halted, matching render order.
+// Within the active section, VMs are sorted by most recently active first.
 func sortVMs(vms []vmw.VM) []vmw.VM {
 	sorted := make([]vmw.VM, len(vms))
 	copy(sorted, vms)
 	sort.SliceStable(sorted, func(i, j int) bool {
-		return sectionOrder(sorted[i]) < sectionOrder(sorted[j])
+		si, sj := sectionOrder(sorted[i]), sectionOrder(sorted[j])
+		if si != sj {
+			return si < sj
+		}
+		// Within the active section, sort by most recently active first.
+		if si == 0 {
+			return lastActiveEpoch(sorted[i]) > lastActiveEpoch(sorted[j])
+		}
+		return false
 	})
 	return sorted
+}
+
+// lastActiveEpoch returns the last-active epoch for sorting (0 if unknown).
+func lastActiveEpoch(vm vmw.VM) int64 {
+	if vm.HaltedAt != nil {
+		return *vm.HaltedAt
+	}
+	if vm.LastActive != nil {
+		return *vm.LastActive
+	}
+	return 0
 }
 
 func sectionOrder(vm vmw.VM) int {
