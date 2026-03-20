@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.8.2](https://github.com/strubio-ray/vm-ward/compare/aa717bed89d6ae2299db12cb2cd9d237c548e053..v1.8.2) - 2026-03-20
+#### Bug Fixes
+- (**sweep**) detect metrics collection state from query output - ([aa717be](https://github.com/strubio-ray/vm-ward/commit/aa717bed89d6ae2299db12cb2cd9d237c548e053)) - Steven
+
+- - -
+
 ## [v1.8.1](https://github.com/strubio-ray/vm-ward/compare/ed4c41a4cd8f854441efcf096986605ee64c2701..v1.8.1) - 2026-03-20
 #### Bug Fixes
 - (**tui**) show dash instead of stale activity string when CPU data unavailable - ([ed4c41a](https://github.com/strubio-ray/vm-ward/commit/ed4c41a4cd8f854441efcf096986605ee64c2701)) - Steven
