@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.8.4](https://github.com/strubio-ray/vm-ward/compare/ebfd4e9c98345e25dd76fad22034cde57b181c89..v1.8.4) - 2026-03-20
+#### Refactoring
+- hardcode CPU activity threshold to 1% and remove configuration - ([ebfd4e9](https://github.com/strubio-ray/vm-ward/commit/ebfd4e9c98345e25dd76fad22034cde57b181c89)) - Steven
+
+- - -
+
 ## [v1.8.3](https://github.com/strubio-ray/vm-ward/compare/489775697237a25c8d5210509b29512c8618f25a..v1.8.3) - 2026-03-20
 #### Bug Fixes
 - (**sweep**) collect CPU metrics for exempt and indefinite VMs - ([4897756](https://github.com/strubio-ray/vm-ward/commit/489775697237a25c8d5210509b29512c8618f25a)) - Steven
