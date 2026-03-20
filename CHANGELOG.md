@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.8.6](https://github.com/strubio-ray/vm-ward/compare/c5c647c819a5ce95b28f240bb84afb05dd40569e..v1.8.6) - 2026-03-20
+#### Features
+- (**tui**) add CPU activity tiebreaker to active VM sort - ([c5c647c](https://github.com/strubio-ray/vm-ward/commit/c5c647c819a5ce95b28f240bb84afb05dd40569e)) - Steven
+
+- - -
+
 ## [v1.8.5](https://github.com/strubio-ray/vm-ward/compare/6216740e54481069f64d5319354a9430b9b1c0eb..v1.8.5) - 2026-03-20
 #### Features
 - (**tui**) sort active VMs by most recently active first - ([6216740](https://github.com/strubio-ray/vm-ward/commit/6216740e54481069f64d5319354a9430b9b1c0eb)) - Steven
