@@ -17,17 +17,6 @@ func RenderPicker(cursor int, vmName string) string {
 	return renderPickerRow(label, DurationPresets, cursor)
 }
 
-// ThresholdPresets are the available choices for the CPU threshold picker.
-var ThresholdPresets = []string{"1%", "2%", "5%", "10%", "15%", "off"}
-
-// DefaultThresholdIndex is the index of the default threshold (5%).
-const DefaultThresholdIndex = 2
-
-// RenderThresholdPicker renders the horizontal CPU threshold selector.
-func RenderThresholdPicker(cursor int) string {
-	return renderPickerRow("  CPU threshold: ", ThresholdPresets, cursor)
-}
-
 // renderPickerRow renders a labeled horizontal preset selector with navigation hints.
 func renderPickerRow(label string, presets []string, cursor int) string {
 	parts := make([]string, len(presets))
@@ -41,26 +30,3 @@ func renderPickerRow(label string, presets []string, cursor int) string {
 	return ConfirmStyle.Render(label) + strings.Join(parts, " ") + FooterDim.Render("  ←/→ select  Enter confirm  Esc cancel")
 }
 
-// ThresholdValue converts a preset string to a threshold integer and enabled flag.
-func ThresholdValue(preset string) (threshold int, enabled bool) {
-	if preset == "off" {
-		return 0, false
-	}
-	var pct int
-	fmt.Sscanf(preset, "%d%%", &pct)
-	return pct, true
-}
-
-// ThresholdPresetIndex returns the index of the preset matching the given threshold.
-func ThresholdPresetIndex(threshold int) int {
-	if threshold <= 0 {
-		return len(ThresholdPresets) - 1 // "off"
-	}
-	target := fmt.Sprintf("%d%%", threshold)
-	for i, p := range ThresholdPresets {
-		if p == target {
-			return i
-		}
-	}
-	return DefaultThresholdIndex
-}

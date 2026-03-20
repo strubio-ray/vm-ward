@@ -28,7 +28,6 @@ type keyMap struct {
 	Indefinite key.Binding
 
 	// Tier 3 — context, low priority (dropped first on narrow terminals)
-	Threshold key.Binding
 	Sweep     key.Binding
 	Refresh   key.Binding
 	Update    key.Binding
@@ -59,7 +58,6 @@ func newKeyMap() keyMap {
 		Exempt:     key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "exempt")),
 		Indefinite: key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "indef")),
 
-		Threshold: key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "cpu threshold")),
 		Sweep:     key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "sweep")),
 		Refresh:   key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "refresh")),
 		Update:    key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "update")),
@@ -79,7 +77,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 		k.Help, k.Quit, k.Navigate,
 		k.Extend, k.Halt, k.Peek,
 		k.Destroy, k.Exempt, k.Indefinite,
-		k.Threshold, k.Sweep, k.Refresh, k.Update, k.UpdateAll,
+		k.Sweep, k.Refresh, k.Update, k.UpdateAll,
 	}
 }
 
@@ -88,7 +86,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.Navigate, k.Help, k.Quit},
 		{k.Extend, k.Halt, k.Peek},
 		{k.Destroy, k.Exempt, k.Indefinite},
-		{k.Threshold, k.Update, k.UpdateAll, k.Sweep, k.Refresh},
+		{k.Update, k.UpdateAll, k.Sweep, k.Refresh},
 	}
 }
 

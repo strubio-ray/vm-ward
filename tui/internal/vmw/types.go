@@ -6,8 +6,6 @@ type StatusResponse struct {
 	LastSweep       *int64     `json:"last_sweep"`
 	RecentEvents    []Event    `json:"recent_events"`
 	VMs             []VM       `json:"vms"`
-	CPUThreshold    *int       `json:"cpu_threshold"`
-	ActivityEnabled *bool      `json:"activity_enabled"`
 }
 
 type DaemonInfo struct {

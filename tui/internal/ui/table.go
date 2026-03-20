@@ -110,7 +110,7 @@ func tableWidth() int {
 }
 
 // cellValue extracts and formats a cell value from a VM by column ID.
-func cellValue(id string, vm vmw.VM, now time.Time, cpuThreshold int) string {
+func cellValue(id string, vm vmw.VM, now time.Time) string {
 	switch id {
 	case "project":
 		return filepath.Base(vm.Path)
@@ -121,7 +121,7 @@ func cellValue(id string, vm vmw.VM, now time.Time, cpuThreshold int) string {
 	case "timeleft":
 		return TimeLeft(vm, now)
 	case "activity":
-		return formatActivity(vm.LastActivity, vm.CPUPercent, cpuThreshold, vm.State)
+		return formatActivity(vm.LastActivity, vm.CPUPercent, vm.State)
 	case "lastactive":
 		return FormatAgo(lastActiveTime(vm), now)
 	case "template":
@@ -159,7 +159,7 @@ func RenderSeparator(width int) string {
 }
 
 // RenderRow renders a single VM row with appropriate coloring, responsive to terminal width.
-func RenderRow(vm vmw.VM, now time.Time, selected bool, width int, cpuThreshold int) string {
+func RenderRow(vm vmw.VM, now time.Time, selected bool, width int) string {
 	layout := VisibleColumns(width)
 	baseStyle := rowStyle(vm, now)
 	if selected {
@@ -168,10 +168,10 @@ func RenderRow(vm vmw.VM, now time.Time, selected bool, width int, cpuThreshold 
 
 	parts := make([]string, len(layout.Cols))
 	for i, col := range layout.Cols {
-		val := truncate(cellValue(col.ID, vm, now, cpuThreshold), col.Width)
+		val := truncate(cellValue(col.ID, vm, now), col.Width)
 		padded := fmt.Sprintf("%-*s", col.Width, val)
 		if col.ID == "activity" && vm.State == "running" {
-			style := ActivityStyle(vm.LastActivity, vm.CPUPercent, cpuThreshold)
+			style := ActivityStyle(vm.LastActivity, vm.CPUPercent)
 			if selected {
 				style = style.Reverse(true)
 			}
@@ -260,12 +260,12 @@ func lastActiveTime(vm vmw.VM) *int64 {
 	return vm.LastActive
 }
 
-func formatActivity(activity *string, cpuPct *int, threshold int, vmState string) string {
+// activityThreshold is the fixed CPU percentage above which a VM is considered active.
+const activityThreshold = 1
+
+func formatActivity(activity *string, cpuPct *int, vmState string) string {
 	if vmState != "running" {
 		return "—"
-	}
-	if threshold <= 0 {
-		return "off"
 	}
 	if activity == nil {
 		return "pending"
@@ -277,17 +277,14 @@ func formatActivity(activity *string, cpuPct *int, threshold int, vmState string
 }
 
 // ActivityStyle returns the lipgloss style for the activity value.
-func ActivityStyle(activity *string, cpuPct *int, threshold int) lipgloss.Style {
-	if threshold <= 0 {
-		return Dim
-	}
+func ActivityStyle(activity *string, cpuPct *int) lipgloss.Style {
 	if activity == nil {
 		return Yellow
 	}
 	if cpuPct == nil || *cpuPct < 0 {
 		return Dim
 	}
-	if *cpuPct >= threshold {
+	if *cpuPct >= activityThreshold {
 		return Green
 	}
 	return Dim

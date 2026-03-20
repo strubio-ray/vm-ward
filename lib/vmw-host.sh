@@ -39,13 +39,8 @@ get_t2_ratio() {
   config_get '.warnings.t2_ratio' "$T2_RATIO"
 }
 
-get_activity_enabled() {
-  config_get '.activity_detection.enabled' "true"
-}
-
-get_activity_cpu_threshold() {
-  config_get '.activity_detection.cpu_threshold' "5"
-}
+# Fixed CPU threshold for activity detection (percentage).
+ACTIVITY_CPU_THRESHOLD=1
 
 daemon_status() {
   local plist_dst="$HOME/Library/LaunchAgents/com.strubio.vm-ward.plist"
@@ -312,7 +307,6 @@ ensure_metrics_setup() {
 
 check_vm_activity() {
   local vbox_uuid="$1"
-  local cpu_threshold="$2"
 
   local output
   output=$(VBoxManage metrics query "$vbox_uuid" CPU/Load/User 2>/dev/null) || {
@@ -333,7 +327,7 @@ check_vm_activity() {
     return
   fi
 
-  if [ "$cpu_pct" -ge "$cpu_threshold" ] 2>/dev/null; then
+  if [ "$cpu_pct" -ge "$ACTIVITY_CPU_THRESHOLD" ] 2>/dev/null; then
     echo "active $cpu_pct"
   else
     echo "idle $cpu_pct"
@@ -523,17 +517,10 @@ cmd_status() {
       recent_events=$(tail -n 5 "$EVENTS_FILE" | jq -sc '.')
     fi
 
-    local cfg_cpu_threshold
-    cfg_cpu_threshold=$(get_activity_cpu_threshold)
-    local cfg_activity_enabled
-    cfg_activity_enabled=$(get_activity_enabled)
-
     jq -nc --argjson daemon "$daemon_json" --argjson vms "$result" \
       --argjson last_sweep "$last_sweep_json" \
       --argjson events "$recent_events" \
-      --argjson cpu_threshold "$cfg_cpu_threshold" \
-      --argjson activity_enabled "$([ "$cfg_activity_enabled" = "true" ] && echo true || echo false)" \
-      '{daemon: $daemon, last_sweep: $last_sweep, recent_events: $events, vms: $vms, cpu_threshold: $cpu_threshold, activity_enabled: $activity_enabled}'
+      '{daemon: $daemon, last_sweep: $last_sweep, recent_events: $events, vms: $vms}'
     return
   fi
 
@@ -624,10 +611,10 @@ cmd_sweep() {
     mode=$(lease_get "$machine_id" "mode")
 
     # Collect CPU metrics for all running VMs (including exempt/indefinite)
-    if [ "$skip_activity" = false ] && [ "$(get_activity_enabled)" = "true" ]; then
+    if [ "$skip_activity" = false ]; then
       ensure_metrics_setup "$vbox_uuid"
       local activity_result
-      activity_result=$(check_vm_activity "$vbox_uuid" "$(get_activity_cpu_threshold)")
+      activity_result=$(check_vm_activity "$vbox_uuid")
       local activity="${activity_result%% *}"
       local cpu_pct="${activity_result##* }"
       local _tmp
@@ -649,7 +636,7 @@ cmd_sweep() {
     fi
 
     # Activity-based lease reset
-    if [ "$skip_activity" = false ] && [ "$(get_activity_enabled)" = "true" ]; then
+    if [ "$skip_activity" = false ]; then
       if [ "$activity" = "active" ]; then
         log "Activity detected on $vm_name, resetting lease"
         reset_lease_activity "$machine_id"
@@ -1049,8 +1036,8 @@ Examples:
   vmw peek .              Peek at current project's VM
 
 Activity detection:
-  Sweep checks running VMs for CPU activity via VBoxManage metrics
-  and resets leases for active VMs. Disable via config: activity_detection.enabled = false
+  Sweep checks running VMs for CPU activity (≥1%) via VBoxManage metrics
+  and resets leases for active VMs. Skip with: vmw sweep --no-activity
 EOF
 }
 

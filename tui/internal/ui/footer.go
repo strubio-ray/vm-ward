@@ -39,14 +39,6 @@ func RenderFooter(width int, helpView string, lastSweep *int64, lastRefresh, now
 	return left
 }
 
-// CPUBadge renders the CPU threshold indicator for the footer.
-func CPUBadge(threshold int) string {
-	if threshold <= 0 {
-		return FooterDim.Render("CPU off")
-	}
-	return FooterDim.Render(fmt.Sprintf("CPU ≥%d%%", threshold))
-}
-
 func sweepCountdown(lastSweep *int64, now time.Time) string {
 	if lastSweep == nil {
 		return FooterDim.Render("Next sweep: unknown")

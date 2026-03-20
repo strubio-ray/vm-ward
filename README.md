@@ -88,10 +88,6 @@ Optional config file at `~/.config/vm-ward/config.json`:
   "warnings": {
     "t1_ratio": 0.5,
     "t2_ratio": 0.875
-  },
-  "activity_detection": {
-    "enabled": true,
-    "cpu_threshold": "5"
   }
 }
 ```

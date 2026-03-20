@@ -42,11 +42,6 @@ type peekMsg struct {
 	raw    string
 	err    error
 }
-type thresholdMsg struct {
-	threshold int
-	err       error
-}
-
 // Model is the bubbletea Model for the vm-ward TUI.
 type Model struct {
 	client vmw.VMClient
@@ -66,8 +61,6 @@ type Model struct {
 	confirmVM     *vmw.VM
 
 	pickerCursor    int
-	thresholdCursor int
-	cpuThreshold    int
 
 	toast    *ui.Toast
 	sweeping bool
@@ -96,7 +89,6 @@ func New(client vmw.VMClient) Model {
 		client:       client,
 		now:          time.Now(),
 		pickerCursor: ui.DefaultPresetIndex,
-		cpuThreshold: 5,
 		keys:         newKeyMap(),
 		help:         help.New(),
 	}
@@ -143,12 +135,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = msg.data
 			m.vms = sortVMs(msg.data.VMs)
 			m.preserveCursor()
-			if msg.data.CPUThreshold != nil {
-				m.cpuThreshold = *msg.data.CPUThreshold
-			}
-			if msg.data.ActivityEnabled != nil && !*msg.data.ActivityEnabled {
-				m.cpuThreshold = 0
-			}
 		}
 		return m, nil
 
@@ -200,21 +186,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case thresholdMsg:
-		if msg.err != nil {
-			detail := errorDetail(msg.err, m.width-6, 3)
-			m.toast = ui.NewToast(fmt.Sprintf("Error setting threshold\n%s", detail), true, errorToastTTL)
-			return m, nil
-		}
-		m.cpuThreshold = msg.threshold
-		if msg.threshold > 0 {
-			m.toast = ui.NewToast(fmt.Sprintf("CPU threshold set to %d%%", msg.threshold), false, toastTTL)
-		} else {
-			m.toast = ui.NewToast("Activity detection disabled", false, toastTTL)
-		}
-		m.refreshing = true
-		return m, fetchStatus(m.client)
-
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
@@ -230,8 +201,6 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleProvisionKey(msg)
 	case StatePicker:
 		return m.handlePickerKey(msg)
-	case StateThresholdPicker:
-		return m.handleThresholdPickerKey(msg)
 	case StatePeek:
 		return m.handlePeekKey(msg)
 	case StateHelp:
@@ -324,11 +293,6 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.confirmVM = vm
 			m.pickerCursor = ui.DefaultPresetIndex
 		}
-		return m, nil
-
-	case key.Matches(msg, m.keys.Threshold):
-		m.state = StateThresholdPicker
-		m.thresholdCursor = ui.ThresholdPresetIndex(m.cpuThreshold)
 		return m, nil
 
 	case key.Matches(msg, m.keys.Sweep):
@@ -485,19 +449,6 @@ func (m Model) handlePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleThresholdPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m2, cmd, handled := m.handlePickerNav(&m.thresholdCursor, len(ui.ThresholdPresets)-1, msg); handled {
-		return m2, cmd
-	}
-	if key.Matches(msg, m.keys.PickerEnter) {
-		preset := ui.ThresholdPresets[m.thresholdCursor]
-		threshold, _ := ui.ThresholdValue(preset)
-		m.state = StateNormal
-		return m, doSetThreshold(m.client, threshold)
-	}
-	return m, nil
-}
-
 func (m Model) handlePeekKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case msg.String() == "ctrl+c":
@@ -643,7 +594,7 @@ func (m Model) View() tea.View {
 			if !vm.Managed || vm.Section == "halted" {
 				continue
 			}
-			b.WriteString(ui.RenderRow(vm, m.now, i == m.cursor, m.width, m.cpuThreshold))
+			b.WriteString(ui.RenderRow(vm, m.now, i == m.cursor, m.width))
 			b.WriteString("\n")
 			anyRendered = true
 		}
@@ -663,7 +614,7 @@ func (m Model) View() tea.View {
 					if !vm.Managed || vm.Section != "halted" {
 						continue
 					}
-					b.WriteString(ui.RenderRow(vm, m.now, i == m.cursor, m.width, m.cpuThreshold))
+					b.WriteString(ui.RenderRow(vm, m.now, i == m.cursor, m.width))
 					b.WriteString("\n")
 				}
 				anyRendered = true
@@ -692,7 +643,7 @@ func (m Model) View() tea.View {
 				if vm.Managed {
 					continue
 				}
-				b.WriteString(ui.RenderRow(vm, m.now, false, m.width, m.cpuThreshold))
+				b.WriteString(ui.RenderRow(vm, m.now, false, m.width))
 				b.WriteString("\n")
 			}
 		}
@@ -719,20 +670,14 @@ func (m Model) View() tea.View {
 		b.WriteString("\n")
 		b.WriteString(ui.RenderPicker(m.pickerCursor, m.confirmVM.Name))
 		b.WriteString("\n")
-	case StateThresholdPicker:
-		b.WriteString("\n")
-		b.WriteString(ui.RenderThresholdPicker(m.thresholdCursor))
-		b.WriteString("\n")
 	}
 
 	// Footer
 	vm := m.selectedVM()
 	m.keys.updateKeyStates(vm, m.pendingAction != "", m.sweeping)
 	helpView := m.help.View(m.keys)
-	badge := ui.CPUBadge(m.cpuThreshold)
-	helpWithBadge := helpView + "  " + badge
 	b.WriteString("\n")
-	b.WriteString(ui.RenderFooter(m.width, helpWithBadge, m.status.LastSweep, m.lastRefresh, m.now))
+	b.WriteString(ui.RenderFooter(m.width, helpView, m.status.LastSweep, m.lastRefresh, m.now))
 
 	// Pad to fill terminal height to prevent flickering
 	rendered := b.String()
@@ -814,7 +759,7 @@ func (m Model) computeLayout() sectionLayout {
 	}
 
 	switch m.state {
-	case StateConfirm, StateConfirmProvision, StatePicker, StateThresholdPicker:
+	case StateConfirm, StateConfirmProvision, StatePicker:
 		overhead += 2 // blank + confirm/picker line
 	}
 
@@ -1008,21 +953,6 @@ func doExtend(client vmw.VMClient, vm *vmw.VM, duration string) tea.Cmd {
 	return func() tea.Msg {
 		err := client.Extend(vm.ID, duration)
 		return actionMsg{"Extended", vm.Name + " by " + duration, err}
-	}
-}
-
-func doSetThreshold(client vmw.VMClient, threshold int) tea.Cmd {
-	return func() tea.Msg {
-		var err error
-		if threshold > 0 {
-			err = client.ConfigSet(".activity_detection.cpu_threshold", fmt.Sprintf("%d", threshold))
-			if err == nil {
-				err = client.ConfigSet(".activity_detection.enabled", "true")
-			}
-		} else {
-			err = client.ConfigSet(".activity_detection.enabled", "false")
-		}
-		return thresholdMsg{threshold, err}
 	}
 }
 
