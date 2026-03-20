@@ -298,13 +298,16 @@ create_lease() {
 
 ensure_metrics_setup() {
   local vbox_uuid="$1"
-  # Check if metrics are already configured for this VM — avoid re-setup which discards collected data
-  local existing
-  existing=$(VBoxManage metrics list "$vbox_uuid" 2>/dev/null | grep -c "CPU/Load/User" || true)
-  if [ "$existing" -eq 0 ]; then
-    # Use parent metric CPU/Load for setup (sub-metrics may not be accepted by setup)
-    VBoxManage metrics setup --period 10 --samples 6 "$vbox_uuid" CPU/Load >/dev/null 2>&1 || true
+  # Check if metrics are actively collecting by looking for percentage values in query output.
+  # VBoxManage metrics list always shows CPU/Load/User even when collection is not enabled,
+  # so we must check query output for actual data instead.
+  local query
+  query=$(VBoxManage metrics query "$vbox_uuid" CPU/Load/User 2>/dev/null) || true
+  if echo "$query" | grep -qE '[0-9]+(\.[0-9]+)?%'; then
+    return 0
   fi
+  # No data — enable metrics collection
+  VBoxManage metrics setup --period 10 --samples 6 "$vbox_uuid" CPU/Load >/dev/null 2>&1 || true
 }
 
 check_vm_activity() {
