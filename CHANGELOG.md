@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.8.0](https://github.com/strubio-ray/vm-ward/compare/57c442837a6fe7e64d5fdbda47543ab65a33cb53..v1.8.0) - 2026-03-20
+#### Features
+- (**tui**) display CPU % in activity column with threshold picker - ([57c4428](https://github.com/strubio-ray/vm-ward/commit/57c442837a6fe7e64d5fdbda47543ab65a33cb53)) - Steven
+
+- - -
+
 ## [v1.7.0](https://github.com/strubio-ray/vm-ward/compare/7a61268049654180e80b8de4f2c918984574ee12..v1.7.0) - 2026-03-19
 #### Features
 - (**tui**) adopt bubbles/help for responsive keybinding display - ([fd6c671](https://github.com/strubio-ray/vm-ward/commit/fd6c671d99d6eed6203537def3166b60551f2b72)) - Steven
