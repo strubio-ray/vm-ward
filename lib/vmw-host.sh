@@ -623,7 +623,21 @@ cmd_sweep() {
     local mode
     mode=$(lease_get "$machine_id" "mode")
 
-    # Skip exempt and indefinite
+    # Collect CPU metrics for all running VMs (including exempt/indefinite)
+    if [ "$skip_activity" = false ] && [ "$(get_activity_enabled)" = "true" ]; then
+      ensure_metrics_setup "$vbox_uuid"
+      local activity_result
+      activity_result=$(check_vm_activity "$vbox_uuid" "$(get_activity_cpu_threshold)")
+      local activity="${activity_result%% *}"
+      local cpu_pct="${activity_result##* }"
+      local _tmp
+      _tmp=$(mktemp "${LEASES_FILE}.XXXXXX")
+      jq --arg id "$machine_id" --arg act "$activity" --arg cpu "$cpu_pct" \
+        '.[$id].last_activity = $act | .[$id].cpu_percent = $cpu' \
+        "$LEASES_FILE" > "$_tmp" && mv "$_tmp" "$LEASES_FILE"
+    fi
+
+    # Skip exempt and indefinite (no expiry/warning logic needed)
     if [ "$mode" = "exempt" ] || [ "$mode" = "indefinite" ]; then
       continue
     fi
@@ -636,16 +650,6 @@ cmd_sweep() {
 
     # Activity-based lease reset
     if [ "$skip_activity" = false ] && [ "$(get_activity_enabled)" = "true" ]; then
-      ensure_metrics_setup "$vbox_uuid"
-      local activity_result
-      activity_result=$(check_vm_activity "$vbox_uuid" "$(get_activity_cpu_threshold)")
-      local activity="${activity_result%% *}"
-      local cpu_pct="${activity_result##* }"
-      local _tmp
-      _tmp=$(mktemp "${LEASES_FILE}.XXXXXX")
-      jq --arg id "$machine_id" --arg act "$activity" --arg cpu "$cpu_pct" \
-        '.[$id].last_activity = $act | .[$id].cpu_percent = $cpu' \
-        "$LEASES_FILE" > "$_tmp" && mv "$_tmp" "$LEASES_FILE"
       if [ "$activity" = "active" ]; then
         log "Activity detected on $vm_name, resetting lease"
         reset_lease_activity "$machine_id"
