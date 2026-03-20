@@ -877,9 +877,14 @@ func sortVMs(vms []vmw.VM) []vmw.VM {
 		if si != sj {
 			return si < sj
 		}
-		// Within the active section, sort by most recently active first.
+		// Within the active section, sort by most recently active first,
+		// then by CPU activity percentage (highest first) as tiebreaker.
 		if si == 0 {
-			return lastActiveEpoch(sorted[i]) > lastActiveEpoch(sorted[j])
+			ai, aj := lastActiveEpoch(sorted[i]), lastActiveEpoch(sorted[j])
+			if ai != aj {
+				return ai > aj
+			}
+			return cpuPercent(sorted[i]) > cpuPercent(sorted[j])
 		}
 		return false
 	})
@@ -893,6 +898,14 @@ func lastActiveEpoch(vm vmw.VM) int64 {
 	}
 	if vm.LastActive != nil {
 		return *vm.LastActive
+	}
+	return 0
+}
+
+// cpuPercent returns the VM's CPU usage for sorting (0 if unknown).
+func cpuPercent(vm vmw.VM) int {
+	if vm.CPUPercent != nil {
+		return *vm.CPUPercent
 	}
 	return 0
 }
