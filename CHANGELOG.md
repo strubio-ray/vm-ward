@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.8.5](https://github.com/strubio-ray/vm-ward/compare/6216740e54481069f64d5319354a9430b9b1c0eb..v1.8.5) - 2026-03-20
+#### Features
+- (**tui**) sort active VMs by most recently active first - ([6216740](https://github.com/strubio-ray/vm-ward/commit/6216740e54481069f64d5319354a9430b9b1c0eb)) - Steven
+
+- - -
+
 ## [v1.8.4](https://github.com/strubio-ray/vm-ward/compare/ebfd4e9c98345e25dd76fad22034cde57b181c89..v1.8.4) - 2026-03-20
 #### Refactoring
 - hardcode CPU activity threshold to 1% and remove configuration - ([ebfd4e9](https://github.com/strubio-ray/vm-ward/commit/ebfd4e9c98345e25dd76fad22034cde57b181c89)) - Steven
