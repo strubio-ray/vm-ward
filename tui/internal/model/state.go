@@ -10,4 +10,5 @@ const (
 	StatePicker                            // Duration preset selector for extend
 	StatePeek                              // Full-screen peek overlay
 	StateHelp                              // Full-screen help overlay
+	StateThresholdPicker                   // CPU threshold preset selector
 )

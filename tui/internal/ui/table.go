@@ -110,7 +110,7 @@ func tableWidth() int {
 }
 
 // cellValue extracts and formats a cell value from a VM by column ID.
-func cellValue(id string, vm vmw.VM, now time.Time) string {
+func cellValue(id string, vm vmw.VM, now time.Time, cpuThreshold int) string {
 	switch id {
 	case "project":
 		return filepath.Base(vm.Path)
@@ -121,7 +121,7 @@ func cellValue(id string, vm vmw.VM, now time.Time) string {
 	case "timeleft":
 		return TimeLeft(vm, now)
 	case "activity":
-		return formatActivity(vm.LastActivity)
+		return formatActivity(vm.LastActivity, vm.CPUPercent, cpuThreshold, vm.State)
 	case "lastactive":
 		return FormatAgo(lastActiveTime(vm), now)
 	case "template":
@@ -159,24 +159,33 @@ func RenderSeparator(width int) string {
 }
 
 // RenderRow renders a single VM row with appropriate coloring, responsive to terminal width.
-func RenderRow(vm vmw.VM, now time.Time, selected bool, width int) string {
+func RenderRow(vm vmw.VM, now time.Time, selected bool, width int, cpuThreshold int) string {
 	layout := VisibleColumns(width)
+	baseStyle := rowStyle(vm, now)
+	if selected {
+		baseStyle = baseStyle.Reverse(true)
+	}
+
 	parts := make([]string, len(layout.Cols))
 	for i, col := range layout.Cols {
-		val := truncate(cellValue(col.ID, vm, now), col.Width)
-		parts[i] = fmt.Sprintf("%-*s", col.Width, val)
+		val := truncate(cellValue(col.ID, vm, now, cpuThreshold), col.Width)
+		padded := fmt.Sprintf("%-*s", col.Width, val)
+		if col.ID == "activity" && vm.State == "running" {
+			style := ActivityStyle(vm.LastActivity, vm.CPUPercent, cpuThreshold)
+			if selected {
+				style = style.Reverse(true)
+			}
+			parts[i] = style.Render(padded)
+		} else {
+			parts[i] = baseStyle.Render(padded)
+		}
 	}
-	line := strings.Join(parts, " ")
 
-	style := rowStyle(vm, now)
-	if selected {
-		style = style.Reverse(true)
-	}
-	rendered := style.Render(line)
+	line := strings.Join(parts, " ")
 	if layout.Hidden {
-		rendered += " " + Dim.Render("…")
+		line += " " + Dim.Render("…")
 	}
-	return rendered
+	return line
 }
 
 // RenderSectionHeader renders a dim italic section label.
@@ -251,26 +260,37 @@ func lastActiveTime(vm vmw.VM) *int64 {
 	return vm.LastActive
 }
 
-func formatActivity(activity *string) string {
+func formatActivity(activity *string, cpuPct *int, threshold int, vmState string) string {
+	if vmState != "running" {
+		return "—"
+	}
+	if threshold <= 0 {
+		return "off"
+	}
 	if activity == nil {
 		return "pending"
+	}
+	if cpuPct != nil && *cpuPct >= 0 {
+		return fmt.Sprintf("%d%%", *cpuPct)
 	}
 	return *activity
 }
 
 // ActivityStyle returns the lipgloss style for the activity value.
-func ActivityStyle(activity *string) lipgloss.Style {
+func ActivityStyle(activity *string, cpuPct *int, threshold int) lipgloss.Style {
+	if threshold <= 0 {
+		return Dim
+	}
 	if activity == nil {
 		return Yellow
 	}
-	switch *activity {
-	case "active":
-		return Green
-	case "idle":
-		return Dim
-	default:
+	if cpuPct == nil || *cpuPct < 0 {
 		return Dim
 	}
+	if *cpuPct >= threshold {
+		return Green
+	}
+	return Dim
 }
 
 func rowStyle(vm vmw.VM, now time.Time) lipgloss.Style {

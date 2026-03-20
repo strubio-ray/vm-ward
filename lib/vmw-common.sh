@@ -136,3 +136,23 @@ config_get() {
   fi
   echo "$default"
 }
+
+# Set a config value (auto-coerces numbers and booleans)
+config_set() {
+  local key="$1" value="$2"
+  local config_file="${VMW_CONFIG_DIR:-$HOME/.config/vm-ward}/config.json"
+  ensure_dirs
+  if [ ! -f "$config_file" ]; then
+    echo '{}' > "$config_file"
+  fi
+  local tmp
+  tmp=$(mktemp "${config_file}.XXXXXX")
+  if jq --arg val "$value" \
+    "$key = (\$val | tonumber? // if . == \"true\" then true elif . == \"false\" then false else . end)" \
+    "$config_file" > "$tmp"; then
+    mv "$tmp" "$config_file"
+  else
+    rm -f "$tmp"
+    return 1
+  fi
+}

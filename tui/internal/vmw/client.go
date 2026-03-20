@@ -21,6 +21,7 @@ type VMClient interface {
 	Update(identifier string, provision bool) error
 	UpdateAll(provision bool) error
 	Peek(ctx context.Context, identifier string) (string, error)
+	ConfigSet(key, value string) error
 }
 
 // ExecClient implements VMClient by shelling out to the vmw binary.
@@ -100,6 +101,11 @@ func (c *ExecClient) runCtx(ctx context.Context, args ...string) ([]byte, error)
 func (c *ExecClient) Peek(ctx context.Context, identifier string) (string, error) {
 	out, err := c.runCtx(ctx, "peek", identifier)
 	return string(out), err
+}
+
+func (c *ExecClient) ConfigSet(key, value string) error {
+	_, err := c.run("config", "set", key, value)
+	return err
 }
 
 func (c *ExecClient) UpdateAll(provision bool) error {

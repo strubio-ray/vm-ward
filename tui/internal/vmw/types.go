@@ -2,10 +2,12 @@ package vmw
 
 // StatusResponse is the top-level JSON returned by vmw status --json.
 type StatusResponse struct {
-	Daemon       DaemonInfo `json:"daemon"`
-	LastSweep    *int64     `json:"last_sweep"`
-	RecentEvents []Event    `json:"recent_events"`
-	VMs          []VM       `json:"vms"`
+	Daemon          DaemonInfo `json:"daemon"`
+	LastSweep       *int64     `json:"last_sweep"`
+	RecentEvents    []Event    `json:"recent_events"`
+	VMs             []VM       `json:"vms"`
+	CPUThreshold    *int       `json:"cpu_threshold"`
+	ActivityEnabled *bool      `json:"activity_enabled"`
 }
 
 type DaemonInfo struct {
@@ -33,6 +35,7 @@ type VM struct {
 	LastActive   *int64  `json:"last_active"`
 	HaltedAt     *int64  `json:"halted_at"`
 	LastActivity *string `json:"last_activity"`
+	CPUPercent   *int    `json:"cpu_percent"`
 	Managed         bool    `json:"managed"`
 	Section         string  `json:"section"`
 	TemplateVersion *string `json:"template_version"`

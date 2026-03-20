@@ -313,7 +313,7 @@ check_vm_activity() {
 
   local output
   output=$(VBoxManage metrics query "$vbox_uuid" CPU/Load/User 2>/dev/null) || {
-    echo "idle"
+    echo "idle -1"
     return
   }
 
@@ -326,14 +326,14 @@ check_vm_activity() {
 
   # No data yet (metrics just set up, need one sampling period to populate)
   if [ -z "$cpu_pct" ]; then
-    echo "idle"
+    echo "idle -1"
     return
   fi
 
   if [ "$cpu_pct" -ge "$cpu_threshold" ] 2>/dev/null; then
-    echo "active"
+    echo "active $cpu_pct"
   else
-    echo "idle"
+    echo "idle $cpu_pct"
   fi
 }
 
@@ -455,11 +455,12 @@ cmd_status() {
         esac
       fi
 
-      local last_active_ts="" duration_val="" last_activity_val=""
+      local last_active_ts="" duration_val="" last_activity_val="" cpu_percent_val=""
       if lease_exists "$machine_id"; then
         last_active_ts=$(lease_get "$machine_id" "last_active")
         duration_val=$(lease_get "$machine_id" "duration")
         last_activity_val=$(lease_get "$machine_id" "last_activity")
+        cpu_percent_val=$(lease_get "$machine_id" "cpu_percent")
       fi
 
       local section="active"
@@ -484,7 +485,8 @@ cmd_status() {
         --arg expires_at_val "$expires_at_val" \
         --arg last_activity "$last_activity_val" \
         --arg tpl_version "$tpl_version" \
-        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, duration: (if $duration == "" then null else $duration end), last_active: (if $last_active == "" then null else ($last_active | tonumber) end), halted_at: (if $halted_at == "" then null else ($halted_at | tonumber) end), managed: true, section: $section, expires_at: (if $expires_at_val == "" or $expires_at_val == "null" then null else ($expires_at_val | tonumber) end), last_activity: (if $last_activity == "" then null else $last_activity end), template_version: (if $tpl_version == "" then null else $tpl_version end)}]')
+        --arg cpu_pct "$cpu_percent_val" \
+        '. + [{id: $id, name: $name, path: $path, state: $state, lease: $lease, remaining: $remaining, duration: (if $duration == "" then null else $duration end), last_active: (if $last_active == "" then null else ($last_active | tonumber) end), halted_at: (if $halted_at == "" then null else ($halted_at | tonumber) end), managed: true, section: $section, expires_at: (if $expires_at_val == "" or $expires_at_val == "null" then null else ($expires_at_val | tonumber) end), last_activity: (if $last_activity == "" then null else $last_activity end), template_version: (if $tpl_version == "" then null else $tpl_version end), cpu_percent: (if $cpu_pct == "" or $cpu_pct == "-1" then null else ($cpu_pct | tonumber) end)}]')
     done
 
     # Add unmanaged VBox VMs
@@ -518,10 +520,17 @@ cmd_status() {
       recent_events=$(tail -n 5 "$EVENTS_FILE" | jq -sc '.')
     fi
 
+    local cfg_cpu_threshold
+    cfg_cpu_threshold=$(get_activity_cpu_threshold)
+    local cfg_activity_enabled
+    cfg_activity_enabled=$(get_activity_enabled)
+
     jq -nc --argjson daemon "$daemon_json" --argjson vms "$result" \
       --argjson last_sweep "$last_sweep_json" \
       --argjson events "$recent_events" \
-      '{daemon: $daemon, last_sweep: $last_sweep, recent_events: $events, vms: $vms}'
+      --argjson cpu_threshold "$cfg_cpu_threshold" \
+      --argjson activity_enabled "$([ "$cfg_activity_enabled" = "true" ] && echo true || echo false)" \
+      '{daemon: $daemon, last_sweep: $last_sweep, recent_events: $events, vms: $vms, cpu_threshold: $cpu_threshold, activity_enabled: $activity_enabled}'
     return
   fi
 
@@ -625,9 +634,15 @@ cmd_sweep() {
     # Activity-based lease reset
     if [ "$skip_activity" = false ] && [ "$(get_activity_enabled)" = "true" ]; then
       ensure_metrics_setup "$vbox_uuid"
-      local activity
-      activity=$(check_vm_activity "$vbox_uuid" "$(get_activity_cpu_threshold)")
-      lease_set "$machine_id" "last_activity" "$activity"
+      local activity_result
+      activity_result=$(check_vm_activity "$vbox_uuid" "$(get_activity_cpu_threshold)")
+      local activity="${activity_result%% *}"
+      local cpu_pct="${activity_result##* }"
+      local _tmp
+      _tmp=$(mktemp "${LEASES_FILE}.XXXXXX")
+      jq --arg id "$machine_id" --arg act "$activity" --arg cpu "$cpu_pct" \
+        '.[$id].last_activity = $act | .[$id].cpu_percent = $cpu' \
+        "$LEASES_FILE" > "$_tmp" && mv "$_tmp" "$LEASES_FILE"
       if [ "$activity" = "active" ]; then
         log "Activity detected on $vm_name, resetting lease"
         reset_lease_activity "$machine_id"
@@ -1005,6 +1020,7 @@ Commands:
   sweep [--no-activity]      Run enforcement loop (called by launchd)
   install                    Install launchd daemon
   uninstall                  Remove launchd daemon
+  config get|set <key> [val]  Get or set config values
   tmux-status                Print tmux status bar segment
   version                    Print version
   help                       Show this help
@@ -1029,6 +1045,14 @@ Activity detection:
   Sweep checks running VMs for CPU activity via VBoxManage metrics
   and resets leases for active VMs. Disable via config: activity_detection.enabled = false
 EOF
+}
+
+cmd_config() {
+  case "${1:-}" in
+    get) config_get "${2:?key required}" "${3:-}" ;;
+    set) config_set "${2:?key required}" "${3:?value required}" ;;
+    *)   die "Usage: vmw config get|set <jq_path> [value]" ;;
+  esac
 }
 
 main() {
@@ -1056,6 +1080,7 @@ main() {
       cmd_update "$@"
       ;;
     peek)        cmd_peek "$@" ;;
+    config)      cmd_config "$@" ;;
     tmux-status) cmd_tmux_status "$@" ;;
     version)     vmw_version ;;
     help|--help|-h) cmd_help ;;
