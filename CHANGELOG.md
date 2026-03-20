@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.8.1](https://github.com/strubio-ray/vm-ward/compare/ed4c41a4cd8f854441efcf096986605ee64c2701..v1.8.1) - 2026-03-20
+#### Bug Fixes
+- (**tui**) show dash instead of stale activity string when CPU data unavailable - ([ed4c41a](https://github.com/strubio-ray/vm-ward/commit/ed4c41a4cd8f854441efcf096986605ee64c2701)) - Steven
+
+- - -
+
 ## [v1.8.0](https://github.com/strubio-ray/vm-ward/compare/57c442837a6fe7e64d5fdbda47543ab65a33cb53..v1.8.0) - 2026-03-20
 #### Features
 - (**tui**) display CPU % in activity column with threshold picker - ([57c4428](https://github.com/strubio-ray/vm-ward/commit/57c442837a6fe7e64d5fdbda47543ab65a33cb53)) - Steven
