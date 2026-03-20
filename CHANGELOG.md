@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v1.8.3](https://github.com/strubio-ray/vm-ward/compare/489775697237a25c8d5210509b29512c8618f25a..v1.8.3) - 2026-03-20
+#### Bug Fixes
+- (**sweep**) collect CPU metrics for exempt and indefinite VMs - ([4897756](https://github.com/strubio-ray/vm-ward/commit/489775697237a25c8d5210509b29512c8618f25a)) - Steven
+
+- - -
+
 ## [v1.8.2](https://github.com/strubio-ray/vm-ward/compare/aa717bed89d6ae2299db12cb2cd9d237c548e053..v1.8.2) - 2026-03-20
 #### Bug Fixes
 - (**sweep**) detect metrics collection state from query output - ([aa717be](https://github.com/strubio-ray/vm-ward/commit/aa717bed89d6ae2299db12cb2cd9d237c548e053)) - Steven
